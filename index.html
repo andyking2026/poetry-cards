@@ -1,0 +1,497 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>初中必背古诗词 · 每日卡片</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.9/babel.min.js"></script>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #faf7f2; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useEffect, useCallback } = React;
+
+const POEMS = [
+  { id:1, grade:"七上", title:"观沧海", author:"曹操", dynasty:"东汉",
+    text:"东临碣石，以观沧海。\n水何澹澹，山岛竦峙。\n树木丛生，百草丰茂。\n秋风萧瑟，洪波涌起。\n日月之行，若出其中；\n星汉灿烂，若出其里。\n幸甚至哉，歌以咏志。",
+    translation:"东行登上碣石山，来观赏大海。海水多么宽阔浩荡，山岛高高地耸立在海边。树木和百草一丛一丛的，十分繁茂。秋风吹动树木发出悲凉的声音，海中涌着巨大的海浪。太阳和月亮的运行，好像是从这浩瀚的海洋中出发的。银河星光灿烂，好像是从这浩瀚的海洋中产生出来的。庆幸得很，就用诗歌来表达内心的志向吧。",
+    keyLines:"日月之行，若出其中；星汉灿烂，若出其里", theme:"借景抒情，表达统一天下的雄心壮志",
+    fillBlanks:[{q:"水何____，山岛____",a:"澹澹 竦峙"},{q:"____之行，若出其中",a:"日月"}]},
+  { id:2, grade:"七上", title:"闻王昌龄左迁龙标遥有此寄", author:"李白", dynasty:"唐",
+    text:"杨花落尽子规啼，\n闻道龙标过五溪。\n我寄愁心与明月，\n随君直到夜郎西。",
+    translation:"在杨花落尽、杜鹃啼鸣之时，听说你被贬为龙标尉，要经过五溪。我把忧愁的心寄托给明月，让它伴随你一直走到那夜郎以西。",
+    keyLines:"我寄愁心与明月，随君直到夜郎西", theme:"借明月寄托对友人的关切与同情",
+    fillBlanks:[{q:"杨花落尽____啼",a:"子规"},{q:"我寄____与明月",a:"愁心"}]},
+  { id:3, grade:"七上", title:"次北固山下", author:"王湾", dynasty:"唐",
+    text:"客路青山外，行舟绿水前。\n潮平两岸阔，风正一帆悬。\n海日生残夜，江春入旧年。\n乡书何处达？归雁洛阳边。",
+    translation:"旅途在青山之外，行船在绿水之中。潮水涨满，两岸之间水面宽阔，顺风行船恰好把帆儿高悬。夜幕还没有褪尽，旭日已在江上冉冉升起，还在旧年时分，江南已有了春天的气息。寄出去的家信不知何时才能到达，希望北归的大雁捎到洛阳去。",
+    keyLines:"海日生残夜，江春入旧年", theme:"思乡之情，蕴含新事物取代旧事物的哲理",
+    fillBlanks:[{q:"____生残夜，____入旧年",a:"海日 江春"},{q:"潮平两岸____，风正一帆____",a:"阔 悬"}]},
+  { id:4, grade:"七上", title:"天净沙·秋思", author:"马致远", dynasty:"元",
+    text:"枯藤老树昏鸦，\n小桥流水人家，\n古道西风瘦马。\n夕阳西下，\n断肠人在天涯。",
+    translation:"天色黄昏，一群乌鸦落在枯藤缠绕的老树上发出凄厉的哀鸣。小桥下流水哗哗作响，小桥边庄户人家炊烟袅袅。古道上一匹瘦马，顶着西风艰难地前行。夕阳渐渐地失去了光泽，从西边落下。凄寒的夜色里，只有孤独的旅人漂泊在遥远的地方。",
+    keyLines:"夕阳西下，断肠人在天涯", theme:"羁旅之思，游子思乡的凄凉心境",
+    fillBlanks:[{q:"枯藤老树____",a:"昏鸦"},{q:"____人在天涯",a:"断肠"}]},
+  { id:5, grade:"七上", title:"望岳", author:"杜甫", dynasty:"唐",
+    text:"岱宗夫如何？齐鲁青未了。\n造化钟神秀，阴阳割昏晓。\n荡胸生曾云，决眦入归鸟。\n会当凌绝顶，一览众山小。",
+    translation:"泰山到底怎么样呢？从齐到鲁都望不尽它青青的山色。大自然把神奇秀丽的景色都汇聚在泰山，山南山北被分割成明暗两部分。层云升腾令人胸襟激荡，睁大眼睛远望飞鸟归林。一定要登上泰山的最高峰，俯瞰群山而显得它们渺小。",
+    keyLines:"会当凌绝顶，一览众山小", theme:"不怕困难、勇攀高峰的雄心气概",
+    fillBlanks:[{q:"造化____神秀，阴阳____昏晓",a:"钟 割"},{q:"会当____绝顶，一____众山小",a:"凌 览"}]},
+  { id:6, grade:"七下", title:"登幽州台歌", author:"陈子昂", dynasty:"唐",
+    text:"前不见古人，\n后不见来者。\n念天地之悠悠，\n独怆然而涕下！",
+    translation:"往前看不到古代的贤君，往后望不见未来的明主。想到天地的广阔无垠和历史的漫长悠久，独自悲伤地流下了眼泪。",
+    keyLines:"前不见古人，后不见来者", theme:"怀才不遇的孤独悲愤",
+    fillBlanks:[{q:"____不见古人，____不见来者",a:"前 后"},{q:"念天地之____，独____然而涕下",a:"悠悠 怆"}]},
+  { id:7, grade:"七下", title:"游山西村", author:"陆游", dynasty:"南宋",
+    text:"莫笑农家腊酒浑，丰年留客足鸡豚。\n山重水复疑无路，柳暗花明又一村。\n箫鼓追随春社近，衣冠简朴古风存。\n从今若许闲乘月，拄杖无时夜叩门。",
+    translation:"不要嫌弃农家腊月酿的酒浑浊，丰收之年待客的菜肴十分丰盛。山峦重叠水流曲折，正担心无路可走，柳绿花艳忽然眼前又出现一个山村。吹着箫打起鼓春社日已经临近，村民们衣冠简朴古风犹存。今后如果还能乘大好月色出外闲游，我一定拄着拐杖随时来敲你的家门。",
+    keyLines:"山重水复疑无路，柳暗花明又一村", theme:"蕴含困境中蕴含希望的哲理",
+    fillBlanks:[{q:"山重水复____无路，柳暗花明____一村",a:"疑 又"},{q:"莫笑农家____酒浑",a:"腊"}]},
+  { id:8, grade:"七下", title:"己亥杂诗（其五）", author:"龚自珍", dynasty:"清",
+    text:"浩荡离愁白日斜，\n吟鞭东指即天涯。\n落红不是无情物，\n化作春泥更护花。",
+    translation:"满怀无尽的离愁别绪，在夕阳西下时我扬鞭东去远赴天涯。落花纷纷，绝不是无情飘洒，化作春泥还能培育出更多的鲜花。",
+    keyLines:"落红不是无情物，化作春泥更护花", theme:"辞官后仍关心国家命运的奉献精神",
+    fillBlanks:[{q:"____不是无情物，化作____更护花",a:"落红 春泥"},{q:"____离愁白日斜",a:"浩荡"}]},
+  { id:9, grade:"八上", title:"黄鹤楼", author:"崔颢", dynasty:"唐",
+    text:"昔人已乘黄鹤去，此地空余黄鹤楼。\n黄鹤一去不复返，白云千载空悠悠。\n晴川历历汉阳树，芳草萋萋鹦鹉洲。\n日暮乡关何处是？烟波江上使人愁。",
+    translation:"昔日仙人已乘着黄鹤飞去，这里只留下一座空荡荡的黄鹤楼。黄鹤一去再也没有回来，千百年来只看见悠悠白云。晴日里汉阳的树木清晰可见，鹦鹉洲上的草木茂盛葱翠。时至黄昏不知何处是我家乡，烟波浩渺的江面上令人忧愁。",
+    keyLines:"晴川历历汉阳树，芳草萋萋鹦鹉洲", theme:"吊古伤今，思乡之情",
+    fillBlanks:[{q:"晴川____汉阳树，芳草____鹦鹉洲",a:"历历 萋萋"},{q:"白云千载____悠悠",a:"空"}]},
+  { id:10, grade:"八上", title:"使至塞上", author:"王维", dynasty:"唐",
+    text:"单车欲问边，属国过居延。\n征蓬出汉塞，归雁入胡天。\n大漠孤烟直，长河落日圆。\n萧关逢候骑，都护在燕然。",
+    translation:"轻车简从去慰问边关守军，作为使者经过居延地区。像随风而去的蓬草一样出临边塞，像北归的大雁一样飞入胡地的天空。浩瀚沙漠中一柱烽烟直上，黄河边上落日正圆。在萧关遇到侦察骑兵，告诉我都护正在燕然前线。",
+    keyLines:"大漠孤烟直，长河落日圆", theme:"边塞壮美风光与孤寂之感",
+    fillBlanks:[{q:"大漠____烟直，长河落日____",a:"孤 圆"},{q:"征蓬出____，归雁入____",a:"汉塞 胡天"}]},
+  { id:11, grade:"八上", title:"钱塘湖春行", author:"白居易", dynasty:"唐",
+    text:"孤山寺北贾亭西，水面初平云脚低。\n几处早莺争暖树，谁家新燕啄春泥。\n乱花渐欲迷人眼，浅草才能没马蹄。\n最爱湖东行不足，绿杨阴里白沙堤。",
+    translation:"从孤山寺的北面到贾公亭的西面，湖面春水刚与堤平，白云重重叠叠，同湖面上的波澜连成一片。几处早出的黄莺争着飞向向阳的树木，谁家新来的燕子衔着春泥在筑巢。繁多而多彩缤纷的春花渐渐要迷住人的眼睛，浅浅的青草刚刚能够遮没马蹄。最喜爱西湖东行的美景，游赏不够，尤其是绿色杨柳荫下的白沙堤。",
+    keyLines:"几处早莺争暖树，谁家新燕啄春泥", theme:"西湖早春生机盎然的美景",
+    fillBlanks:[{q:"几处____争暖树，谁家____啄春泥",a:"早莺 新燕"},{q:"乱花渐欲____人眼，浅草才能____马蹄",a:"迷 没"}]},
+  { id:12, grade:"八上", title:"饮酒（其五）", author:"陶渊明", dynasty:"东晋",
+    text:"结庐在人境，而无车马喧。\n问君何能尔？心远地自偏。\n采菊东篱下，悠然见南山。\n山气日夕佳，飞鸟相与还。\n此中有真意，欲辨已忘言。",
+    translation:"建造简陋的房屋在喧嚣的尘世，却没有车马往来的喧闹。问我为什么能做到这样？心灵远离尘俗，自然觉得住所偏远安静了。在东篱边上采摘菊花，闲适淡泊中远处的南山映入眼帘。山间的云气和黄昏的夕阳都十分美好，鸟儿结伴回归远山的怀抱。这其中蕴含人生真正的意义，想要分辨清楚，却已忘了怎样表达。",
+    keyLines:"采菊东篱下，悠然见南山", theme:"归隐田园、悠然自得的超脱心境",
+    fillBlanks:[{q:"采菊____下，____见南山",a:"东篱 悠然"},{q:"心____地自____",a:"远 偏"}]},
+  { id:13, grade:"八上", title:"春望", author:"杜甫", dynasty:"唐",
+    text:"国破山河在，城春草木深。\n感时花溅泪，恨别鸟惊心。\n烽火连三月，家书抵万金。\n白头搔更短，浑欲不胜簪。",
+    translation:"国都沦陷只有山河依旧，春日的城区里杂草丛生。感伤国事，不禁涕泪四溅，悲叹离别，鸟鸣令人心惊。战火连绵不断，家书难得，一封抵得上万两黄金。白发越搔越少，简直要插不住簪子了。",
+    keyLines:"感时花溅泪，恨别鸟惊心", theme:"忧国忧民、感时伤世的深沉情怀",
+    fillBlanks:[{q:"感时花____泪，恨别鸟____心",a:"溅 惊"},{q:"家书____万金",a:"抵"}]},
+  { id:14, grade:"八上", title:"雁门太守行", author:"李贺", dynasty:"唐",
+    text:"黑云压城城欲摧，甲光向日金鳞开。\n角声满天秋色里，塞上燕脂凝夜紫。\n半卷红旗临易水，霜重鼓寒声不起。\n报君黄金台上意，提携玉龙为君死。",
+    translation:"黑云压城而来城墙仿佛要被摧毁，铠甲迎着日光闪动像金色的鱼鳞。号角声震天动地回荡在秋色里，边塞的泥土被鲜血凝成了暗紫色。半卷着红旗悄悄接近易水边，寒霜凝冻战鼓低沉擂不响。为了报答君王的知遇之恩，手提宝剑甘愿为国捐躯。",
+    keyLines:"黑云压城城欲摧，甲光向日金鳞开", theme:"边塞将士誓死报国的壮烈精神",
+    fillBlanks:[{q:"黑云压城城欲____，甲光向日金鳞____",a:"摧 开"},{q:"报君____上意，提携____为君死",a:"黄金台 玉龙"}]},
+  { id:15, grade:"八上", title:"赤壁", author:"杜牧", dynasty:"唐",
+    text:"折戟沉沙铁未销，\n自将磨洗认前朝。\n东风不与周郎便，\n铜雀春深锁二乔。",
+    translation:"折断的战戟沉在泥沙中至今还没有销毁，拿起来磨洗一番还能辨认出是前朝的遗物。假如东风不给周瑜以方便，恐怕大乔小乔就会被曹操掳去锁在铜雀台里了。",
+    keyLines:"东风不与周郎便，铜雀春深锁二乔", theme:"借古讽今，英雄的成功离不开机遇",
+    fillBlanks:[{q:"折戟沉沙铁未____",a:"销"},{q:"东风不与____便",a:"周郎"}]},
+  { id:16, grade:"八上", title:"野望", author:"王绩", dynasty:"唐",
+    text:"东皋薄暮望，徙倚欲何依。\n树树皆秋色，山山唯落晖。\n牧人驱犊返，猎马带禽归。\n相顾无相识，长歌怀采薇。",
+    translation:"傍晚时分伫立在东皋村头，纵目远望，徘徊不定不知归向何方。层层树林都染上秋天的色彩，重重山岭都披着落日的余晖。牧人驱赶着牛群返回，猎人骑着马带着猎获的鸟兽归来。大家相对无言彼此互不相识，我长啸高歌真想隐居在山冈。",
+    keyLines:"树树皆秋色，山山唯落晖", theme:"秋日山野景色与孤独归隐之情",
+    fillBlanks:[{q:"树树皆____，山山唯____",a:"秋色 落晖"},{q:"相顾无相识，长歌怀____",a:"采薇"}]},
+  { id:17, grade:"八下", title:"茅屋为秋风所破歌（节选）", author:"杜甫", dynasty:"唐",
+    text:"八月秋高风怒号，卷我屋上三重茅。\n茅飞渡江洒江郊，高者挂罥长林梢，下者飘转沉塘坳。\n……\n安得广厦千万间，大庇天下寒士俱欢颜！\n风雨不动安如山。\n呜呼！何时眼前突兀见此屋，吾庐独破受冻死亦足！",
+    translation:"八月深秋，大风怒吼，把我屋顶上的几层茅草都卷走了。……如何才能得到千万间宽敞高大的房屋，庇护天下贫寒的读书人，让他们个个都开颜欢笑！房子在风雨中也不为所动，安稳得像是山一样。唉！什么时候眼前能出现这样的房屋，即使只有我的茅屋被吹破，我受冻而死也心甘情愿！",
+    keyLines:"安得广厦千万间，大庇天下寒士俱欢颜", theme:"忧国忧民、推己及人的博大胸怀",
+    fillBlanks:[{q:"安得广厦____间，大____天下寒士俱欢颜",a:"千万 庇"},{q:"吾庐独破受冻死亦____",a:"足"}]},
+  { id:18, grade:"八下", title:"白雪歌送武判官归京", author:"岑参", dynasty:"唐",
+    text:"北风卷地白草折，胡天八月即飞雪。\n忽如一夜春风来，千树万树梨花开。\n散入珠帘湿罗幕，狐裘不暖锦衾薄。\n将军角弓不得控，都护铁衣冷难着。\n……\n轮台东门送君去，去时雪满天山路。\n山回路转不见君，雪上空留马行处。",
+    translation:"北风席卷大地把白草吹折，胡地八月就飘起大雪。仿佛一夜之间春风吹来，树上犹如梨花竞相开放。……在轮台东门外送你离去，离去时大雪铺满天山道路。山路迂回曲折已看不见你的身影，雪地上只留下一串马蹄印迹。",
+    keyLines:"忽如一夜春风来，千树万树梨花开", theme:"边塞雪景与送别之情",
+    fillBlanks:[{q:"忽如一夜____来，千树万树____开",a:"春风 梨花"},{q:"山回路转不见君，雪上空留____",a:"马行处"}]},
+  { id:19, grade:"九上", title:"行路难（其一）", author:"李白", dynasty:"唐",
+    text:"金樽清酒斗十千，玉盘珍羞直万钱。\n停杯投箸不能食，拔剑四顾心茫然。\n欲渡黄河冰塞川，将登太行雪满山。\n闲来垂钓碧溪上，忽复乘舟梦日边。\n行路难！行路难！多歧路，今安在？\n长风破浪会有时，直挂云帆济沧海。",
+    translation:"金杯里装的名酒每斗要价十千，玉盘中盛的精美菜肴收费万钱。胸中郁闷我放下杯筷不愿进餐，拔出宝剑环顾四周心中一片茫然。想渡黄河冰雪堵塞了这条大川，要登太行山大雪封山。总有一天能乘长风破万里浪，高高挂起云帆，在沧海中勇往直前。",
+    keyLines:"长风破浪会有时，直挂云帆济沧海", theme:"怀才不遇但积极追求理想",
+    fillBlanks:[{q:"长风破浪____有时，直挂云帆____沧海",a:"会 济"},{q:"欲渡黄河____塞川，将登太行____满山",a:"冰 雪"}]},
+  { id:20, grade:"九上", title:"水调歌头·明月几时有", author:"苏轼", dynasty:"北宋",
+    text:"明月几时有？把酒问青天。\n不知天上宫阙，今夕是何年。\n我欲乘风归去，又恐琼楼玉宇，高处不胜寒。\n起舞弄清影，何似在人间。\n\n转朱阁，低绮户，照无眠。\n不应有恨，何事长向别时圆？\n人有悲欢离合，月有阴晴圆缺，此事古难全。\n但愿人长久，千里共婵娟。",
+    translation:"明月是从什么时候才出现的？我端起酒杯遥问苍天。人有悲欢离合的变迁，月有阴晴圆缺的转换，这种事自古以来就难以两全。只希望人们都能健康长寿，即使相隔千里也能共赏明月。",
+    keyLines:"但愿人长久，千里共婵娟", theme:"对亲人的思念和美好祝愿",
+    fillBlanks:[{q:"但愿人长久，千里共____",a:"婵娟"},{q:"人有悲欢____，月有阴晴____",a:"离合 圆缺"}]},
+  { id:21, grade:"九上", title:"酬乐天扬州初逢席上见赠", author:"刘禹锡", dynasty:"唐",
+    text:"巴山楚水凄凉地，二十三年弃置身。\n怀旧空吟闻笛赋，到乡翻似烂柯人。\n沉舟侧畔千帆过，病树前头万木春。\n今日听君歌一曲，暂凭杯酒长精神。",
+    translation:"在巴山楚水这些凄凉的地方，度过了二十三年沦落的光阴。沉舟旁边千帆竞发，病树前面万木争春。今天听了你为我吟诵的诗篇，暂且借这一杯美酒振奋精神。",
+    keyLines:"沉舟侧畔千帆过，病树前头万木春", theme:"身世之感中蕴含新事物取代旧事物的哲理",
+    fillBlanks:[{q:"沉舟侧畔____过，病树前头____春",a:"千帆 万木"},{q:"怀旧空吟____赋",a:"闻笛"}]},
+  { id:22, grade:"九下", title:"过零丁洋", author:"文天祥", dynasty:"南宋",
+    text:"辛苦遭逢起一经，干戈寥落四周星。\n山河破碎风飘絮，身世浮沉雨打萍。\n惶恐滩头说惶恐，零丁洋里叹零丁。\n人生自古谁无死？留取丹心照汗青。",
+    translation:"人生自古以来有谁不死？我要留下一颗赤诚的心照耀史册。",
+    keyLines:"人生自古谁无死？留取丹心照汗青", theme:"视死如归的爱国精神和民族气节",
+    fillBlanks:[{q:"山河破碎风飘____，身世浮沉雨打____",a:"絮 萍"},{q:"留取____照汗青",a:"丹心"}]},
+  { id:23, grade:"九下", title:"江城子·密州出猎", author:"苏轼", dynasty:"北宋",
+    text:"老夫聊发少年狂，左牵黄，右擎苍，\n锦帽貂裘，千骑卷平冈。\n为报倾城随太守，亲射虎，看孙郎。\n\n酒酣胸胆尚开张，鬓微霜，又何妨！\n持节云中，何日遣冯唐？\n会挽雕弓如满月，西北望，射天狼。",
+    translation:"我姑且抒发一下少年人的豪情……到那时我要把雕弓拉得像满月一样，对准西北方向，射杀那入侵的天狼星。",
+    keyLines:"会挽雕弓如满月，西北望，射天狼", theme:"渴望为国效力的壮志豪情",
+    fillBlanks:[{q:"会挽____如满月，____望，射天狼",a:"雕弓 西北"},{q:"老夫聊发____狂",a:"少年"}]},
+  { id:24, grade:"九下", title:"破阵子·为陈同甫赋壮词以寄之", author:"辛弃疾", dynasty:"南宋",
+    text:"醉里挑灯看剑，梦回吹角连营。\n八百里分麾下炙，五十弦翻塞外声，\n沙场秋点兵。\n\n马作的卢飞快，弓如霹雳弦惊。\n了却君王天下事，赢得生前身后名。\n可怜白发生！",
+    translation:"醉梦里挑亮油灯观看宝剑，梦中回到了号角声声的军营。完成了君王统一天下的大业，赢得了生前死后世代传颂的美名。可惜我已经满头白发了！",
+    keyLines:"了却君王天下事，赢得生前身后名", theme:"壮志难酬的悲愤与爱国之情",
+    fillBlanks:[{q:"了却君王____事，赢得____身后名",a:"天下 生前"},{q:"醉里挑灯____，梦回吹角____",a:"看剑 连营"}]},
+];
+
+function getDayOfYear(){const now=new Date();const start=new Date(now.getFullYear(),0,0);return Math.floor((now-start)/86400000);}
+function seededShuffle(arr,seed){const a=[...arr];let s=seed;for(let i=a.length-1;i>0;i--){s=(s*16807+7)%2147483647;const j=s%(i+1);[a[i],a[j]]=[a[j],a[i]];}return a;}
+function getTodayPoems(){const day=getDayOfYear()+new Date().getFullYear()*366;return seededShuffle(POEMS,day).slice(0,3);}
+
+function App(){
+  const [view,setView]=useState("home");
+  const [cardIdx,setCardIdx]=useState(0);
+  const [flipped,setFlipped]=useState(false);
+  const [showAnswer,setShowAnswer]=useState(false);
+  const [quizAnswers,setQuizAnswers]=useState({});
+  const [quizSubmitted,setQuizSubmitted]=useState(false);
+  const [progress,setProgress]=useState({});
+  const [todayPoems]=useState(getTodayPoems);
+  const [streak,setStreak]=useState(1);
+  const [slideDir,setSlideDir]=useState("next");
+  const [animating,setAnimating]=useState(false);
+  const [reviewPool,setReviewPool]=useState([]);
+  const [fadeIn,setFadeIn]=useState(true);
+  const [showResetConfirm,setShowResetConfirm]=useState(false);
+
+  const today=new Date().toISOString().slice(0,10);
+  const masteredCount=Object.values(progress).filter(p=>p.mastered).length;
+  const totalPoems=POEMS.length;
+
+  useEffect(()=>{setFadeIn(false);const t=setTimeout(()=>setFadeIn(true),50);return()=>clearTimeout(t);},[view]);
+
+  const markMastered=useCallback((id)=>{setProgress(prev=>({...prev,[id]:{...prev[id],mastered:!prev[id]?.mastered,lastReview:today}}));},[today]);
+  const markReviewed=useCallback((id)=>{setProgress(prev=>({...prev,[id]:{...prev[id],reviewed:(prev[id]?.reviewed||0)+1,lastReview:today}}));},[today]);
+
+  const currentPoem=view==="review"?reviewPool[cardIdx]:todayPoems[cardIdx];
+  const pool=view==="review"?reviewPool:todayPoems;
+
+  const goNext=useCallback(()=>{if(cardIdx<pool.length-1){setSlideDir("next");setAnimating(true);setFlipped(false);setShowAnswer(false);setTimeout(()=>{setCardIdx(i=>i+1);setAnimating(false);},250);}},[cardIdx,pool]);
+  const goPrev=useCallback(()=>{if(cardIdx>0){setSlideDir("prev");setAnimating(true);setFlipped(false);setShowAnswer(false);setTimeout(()=>{setCardIdx(i=>i-1);setAnimating(false);},250);}},[cardIdx]);
+
+  const startReview=useCallback((filter)=>{let p;if(filter==="mastered")p=POEMS.filter(x=>progress[x.id]?.mastered);else if(filter==="unmastered")p=POEMS.filter(x=>!progress[x.id]?.mastered);else p=[...POEMS];if(p.length===0)p=[...POEMS];setReviewPool(seededShuffle(p,Date.now()));setCardIdx(0);setFlipped(false);setShowAnswer(false);setView("review");},[progress]);
+
+  const startQuiz=useCallback(()=>{setQuizAnswers({});setQuizSubmitted(false);setView("quiz");},[]);
+  const submitQuiz=useCallback(()=>{setQuizSubmitted(true);const p=pool[cardIdx];if(p)markReviewed(p.id);},[pool,cardIdx,markReviewed]);
+
+  const getScore=useCallback(()=>{const p=pool[cardIdx]||POEMS[0];if(!p)return{correct:0,total:0};let c=0;p.fillBlanks.forEach((fb,i)=>{if((quizAnswers[i]||"").trim().replace(/\s+/g," ")===fb.a)c++;});return{correct:c,total:p.fillBlanks.length};},[quizAnswers,pool,cardIdx]);
+
+  const renderNav=()=>(
+    <div style={{display:"flex",gap:4,padding:"0 16px",marginBottom:8,borderBottom:"1px solid rgba(120,80,40,0.12)"}}>
+      {[{key:"home",label:"首页",icon:"🏠"},{key:"study",label:"学习",icon:"📖"},{key:"review",label:"复习",icon:"🔄"},{key:"stats",label:"统计",icon:"📊"}].map(item=>(
+        <button key={item.key} onClick={()=>{
+          if(item.key==="review")startReview("unmastered");
+          else if(item.key==="study"){setCardIdx(0);setFlipped(false);setShowAnswer(false);setView("study");}
+          else setView(item.key);
+        }} style={{flex:1,padding:"10px 0",border:"none",borderRadius:0,
+          background:view===item.key?"rgba(120,80,40,0.08)":"transparent",
+          color:view===item.key?"#7a4f1a":"#999",fontWeight:view===item.key?700:400,
+          fontSize:13,cursor:"pointer",transition:"all 0.2s",
+          borderBottom:view===item.key?"2px solid #7a4f1a":"2px solid transparent",
+          fontFamily:"system-ui, sans-serif"}}>
+          <div style={{fontSize:18}}>{item.icon}</div><div>{item.label}</div>
+        </button>
+      ))}
+    </div>
+  );
+
+  const renderCard=(poem,p,idx)=>{
+    if(!poem)return <div style={{textAlign:"center",padding:40,color:"#999"}}>暂无卡片</div>;
+    const isM=progress[poem.id]?.mastered;const rc=progress[poem.id]?.reviewed||0;
+    return(
+      <div style={{perspective:1200,maxWidth:520,margin:"0 auto",width:"100%",
+        opacity:animating?0:1,transform:animating?`translateX(${slideDir==="next"?60:-60}px)`:"translateX(0)",
+        transition:"all 0.3s cubic-bezier(0.4,0,0.2,1)"}}>
+        <div style={{display:"flex",justifyContent:"center",gap:6,marginBottom:12}}>
+          {p.map((_,i)=>(<div key={i} style={{width:i===idx?20:6,height:6,borderRadius:3,
+            background:i===idx?"#7a4f1a":"rgba(120,80,40,0.2)",transition:"all 0.3s"}}/>))}
+        </div>
+        <div onClick={()=>setFlipped(!flipped)} style={{position:"relative",width:"100%",minHeight:380,
+          cursor:"pointer",transformStyle:"preserve-3d",
+          transition:"transform 0.6s cubic-bezier(0.4,0,0.2,1)",
+          transform:flipped?"rotateY(180deg)":"rotateY(0)"}}>
+          <div style={{position:"absolute",width:"100%",minHeight:380,backfaceVisibility:"hidden",
+            background:"linear-gradient(145deg, #fdf8f0 0%, #f5ead6 50%, #fdf8f0 100%)",
+            borderRadius:16,padding:"28px 24px",
+            boxShadow:"0 4px 24px rgba(120,80,40,0.10), 0 1px 3px rgba(0,0,0,0.06)",
+            border:"1px solid rgba(120,80,40,0.12)",display:"flex",flexDirection:"column"}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
+              <span style={{fontSize:11,color:"#8b6914",background:"rgba(139,105,20,0.08)",padding:"3px 10px",borderRadius:12,fontWeight:500}}>{poem.grade}</span>
+              <div style={{display:"flex",gap:6}}>
+                {isM&&<span style={{fontSize:11,color:"#2d7d46",background:"rgba(45,125,70,0.08)",padding:"3px 10px",borderRadius:12}}>已掌握</span>}
+                <span style={{fontSize:11,color:"#999",background:"rgba(0,0,0,0.04)",padding:"3px 10px",borderRadius:12}}>复习{rc}次</span>
+              </div>
+            </div>
+            <div style={{textAlign:"center",flex:1,display:"flex",flexDirection:"column",justifyContent:"center"}}>
+              <div style={{fontSize:28,fontWeight:700,color:"#3a2a14",letterSpacing:4,marginBottom:8,
+                fontFamily:"'Noto Serif SC','STSong','SimSun',serif"}}>{poem.title}</div>
+              <div style={{fontSize:14,color:"#8b7355",marginBottom:24}}>[{poem.dynasty}] {poem.author}</div>
+              <div style={{fontSize:16,color:"#5a3e1b",lineHeight:1.8,padding:"16px 20px",margin:"0 auto",
+                borderLeft:"3px solid #c9a96e",background:"rgba(201,169,110,0.06)",borderRadius:"0 8px 8px 0",
+                fontFamily:"'Noto Serif SC','STSong','SimSun',serif",maxWidth:"90%"}}>{poem.keyLines}</div>
+            </div>
+            <div style={{textAlign:"center",fontSize:12,color:"#c9a96e",paddingTop:12,borderTop:"1px solid rgba(201,169,110,0.2)"}}>
+              点击翻转查看完整内容 →
+            </div>
+          </div>
+          <div style={{position:"absolute",width:"100%",minHeight:380,backfaceVisibility:"hidden",
+            transform:"rotateY(180deg)",
+            background:"linear-gradient(145deg, #f0f5ee 0%, #e8efe4 50%, #f0f5ee 100%)",
+            borderRadius:16,padding:"24px 20px",
+            boxShadow:"0 4px 24px rgba(60,100,60,0.10), 0 1px 3px rgba(0,0,0,0.06)",
+            border:"1px solid rgba(60,100,60,0.12)",overflow:"auto"}}>
+            <div style={{fontSize:15,color:"#2a3a2a",lineHeight:2,textAlign:"center",padding:"12px 0",marginBottom:12,
+              borderBottom:"1px solid rgba(60,100,60,0.15)",
+              fontFamily:"'Noto Serif SC','STSong','SimSun',serif",whiteSpace:"pre-line"}}>
+              <div style={{fontSize:12,color:"#6a8a6a",marginBottom:8,fontFamily:"system-ui"}}>
+                【{poem.dynasty}】{poem.author} · {poem.title}
+              </div>{poem.text}
+            </div>
+            {showAnswer&&<>
+              <div style={{fontSize:12.5,color:"#5a6a5a",lineHeight:1.8,padding:"10px 12px",marginBottom:10,
+                background:"rgba(60,100,60,0.04)",borderRadius:8}}>
+                <div style={{fontWeight:600,marginBottom:4,color:"#3a5a3a",fontSize:12}}>译文</div>{poem.translation}
+              </div>
+              <div style={{fontSize:12,color:"#6a4a2a",padding:"8px 12px",background:"rgba(160,100,40,0.06)",borderRadius:8,marginBottom:10}}>
+                <span style={{fontWeight:600}}>主旨：</span>{poem.theme}
+              </div>
+            </>}
+            <div style={{display:"flex",gap:8,marginTop:"auto"}}>
+              {!showAnswer&&<button onClick={e=>{e.stopPropagation();setShowAnswer(true);}} style={{
+                flex:1,padding:"10px 0",border:"none",borderRadius:8,background:"#4a7c59",color:"#fff",fontSize:13,cursor:"pointer",fontWeight:600}}>显示译文与解析</button>}
+              <button onClick={e=>{e.stopPropagation();markMastered(poem.id);}} style={{
+                flex:1,padding:"10px 0",border:"1px solid",borderRadius:8,
+                borderColor:isM?"#2d7d46":"rgba(60,100,60,0.3)",
+                background:isM?"rgba(45,125,70,0.1)":"transparent",
+                color:isM?"#2d7d46":"#5a6a5a",fontSize:13,cursor:"pointer",fontWeight:500}}>
+                {isM?"已掌握 ✓":"标记掌握"}
+              </button>
+            </div>
+          </div>
+        </div>
+        <div style={{display:"flex",justifyContent:"space-between",marginTop:16,gap:8}}>
+          <button onClick={goPrev} disabled={idx===0} style={{padding:"10px 20px",border:"1px solid rgba(120,80,40,0.2)",
+            borderRadius:10,background:idx===0?"rgba(0,0,0,0.02)":"#fff",color:idx===0?"#ccc":"#7a4f1a",fontSize:13,
+            cursor:idx===0?"default":"pointer",fontWeight:500}}>← 上一张</button>
+          <button onClick={startQuiz} style={{padding:"10px 16px",border:"none",borderRadius:10,
+            background:"linear-gradient(135deg, #c9a96e 0%, #8b6914 100%)",color:"#fff",fontSize:13,cursor:"pointer",
+            fontWeight:600,boxShadow:"0 2px 8px rgba(139,105,20,0.2)"}}>默写检测</button>
+          <button onClick={goNext} disabled={idx>=p.length-1} style={{padding:"10px 20px",border:"1px solid rgba(120,80,40,0.2)",
+            borderRadius:10,background:idx>=p.length-1?"rgba(0,0,0,0.02)":"#fff",color:idx>=p.length-1?"#ccc":"#7a4f1a",fontSize:13,
+            cursor:idx>=p.length-1?"default":"pointer",fontWeight:500}}>下一张 →</button>
+        </div>
+      </div>
+    );
+  };
+
+  const renderQuiz=()=>{
+    const poem=pool[cardIdx]||POEMS[0];
+    const {correct,total}=quizSubmitted?getScore():{correct:0,total:poem.fillBlanks.length};
+    return(
+      <div style={{maxWidth:520,margin:"0 auto",padding:"0 16px"}}>
+        <div style={{background:"linear-gradient(145deg, #fdf8f0 0%, #f5ead6 100%)",borderRadius:16,padding:"24px 20px",
+          boxShadow:"0 4px 24px rgba(120,80,40,0.10)",border:"1px solid rgba(120,80,40,0.12)"}}>
+          <div style={{textAlign:"center",marginBottom:20}}>
+            <div style={{fontSize:11,color:"#c9a96e",marginBottom:4}}>默写检测</div>
+            <div style={{fontSize:20,fontWeight:700,color:"#3a2a14",fontFamily:"'Noto Serif SC','STSong',serif"}}>{poem.title}</div>
+            <div style={{fontSize:13,color:"#8b7355"}}>[{poem.dynasty}] {poem.author}</div>
+          </div>
+          {poem.fillBlanks.map((fb,i)=>{
+            const isC=quizSubmitted&&(quizAnswers[i]||"").trim().replace(/\s+/g," ")===fb.a;
+            const isW=quizSubmitted&&!isC;
+            return(
+              <div key={i} style={{marginBottom:16,padding:"14px 16px",
+                background:isC?"rgba(45,125,70,0.06)":isW?"rgba(200,50,50,0.06)":"rgba(120,80,40,0.03)",
+                borderRadius:10,border:`1px solid ${isC?"rgba(45,125,70,0.2)":isW?"rgba(200,50,50,0.2)":"rgba(120,80,40,0.08)"}`,
+                transition:"all 0.3s"}}>
+                <div style={{fontSize:16,color:"#3a2a14",marginBottom:10,textAlign:"center",
+                  fontFamily:"'Noto Serif SC','STSong',serif",letterSpacing:2,lineHeight:1.8}}>{fb.q}</div>
+                <input type="text" value={quizAnswers[i]||""} onChange={e=>setQuizAnswers({...quizAnswers,[i]:e.target.value})}
+                  placeholder="填写答案..." disabled={quizSubmitted}
+                  style={{width:"100%",padding:"10px 14px",border:"1px solid rgba(120,80,40,0.15)",borderRadius:8,
+                    fontSize:14,background:quizSubmitted?"rgba(0,0,0,0.02)":"#fff",color:"#3a2a14",outline:"none",
+                    boxSizing:"border-box",textAlign:"center",letterSpacing:2,fontFamily:"'Noto Serif SC','STSong',serif"}}/>
+                {isW&&<div style={{fontSize:12,color:"#c44",marginTop:6,textAlign:"center"}}>正确答案：<span style={{fontWeight:600}}>{fb.a}</span></div>}
+                {isC&&<div style={{fontSize:12,color:"#2d7d46",marginTop:6,textAlign:"center"}}>回答正确</div>}
+              </div>
+            );
+          })}
+          {!quizSubmitted?(
+            <button onClick={submitQuiz} style={{width:"100%",padding:"14px 0",border:"none",borderRadius:10,
+              background:"linear-gradient(135deg, #c9a96e 0%, #8b6914 100%)",color:"#fff",fontSize:15,cursor:"pointer",
+              fontWeight:700,boxShadow:"0 2px 8px rgba(139,105,20,0.2)",letterSpacing:2}}>提交答案</button>
+          ):(
+            <div style={{textAlign:"center"}}>
+              <div style={{fontSize:18,fontWeight:700,marginBottom:12,
+                color:correct===total?"#2d7d46":correct>=total/2?"#8b6914":"#c44"}}>
+                {correct===total?"全部正确！":`${correct}/${total} 正确`}</div>
+              <div style={{display:"flex",gap:8}}>
+                <button onClick={()=>{setQuizAnswers({});setQuizSubmitted(false);}} style={{flex:1,padding:"12px 0",
+                  border:"1px solid rgba(120,80,40,0.2)",borderRadius:10,background:"#fff",color:"#7a4f1a",fontSize:14,
+                  cursor:"pointer",fontWeight:500}}>再试一次</button>
+                <button onClick={()=>{setFlipped(false);setShowAnswer(false);setView("study");}} style={{flex:1,padding:"12px 0",
+                  border:"none",borderRadius:10,background:"#4a7c59",color:"#fff",fontSize:14,cursor:"pointer",fontWeight:600}}>返回学习</button>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  };
+
+  const renderHome=()=>(
+    <div style={{maxWidth:520,margin:"0 auto",padding:"0 16px"}}>
+      <div style={{textAlign:"center",padding:"32px 20px",
+        background:"linear-gradient(145deg, #fdf8f0 0%, #f5ead6 40%, #fdf8f0 100%)",borderRadius:20,marginBottom:20,
+        boxShadow:"0 4px 24px rgba(120,80,40,0.08)",border:"1px solid rgba(120,80,40,0.08)",position:"relative",overflow:"hidden"}}>
+        <div style={{position:"absolute",top:-30,right:-30,width:120,height:120,borderRadius:"50%",
+          background:"radial-gradient(circle, rgba(201,169,110,0.12) 0%, transparent 70%)"}}/>
+        <div style={{position:"absolute",bottom:-20,left:-20,width:80,height:80,borderRadius:"50%",
+          background:"radial-gradient(circle, rgba(74,124,89,0.08) 0%, transparent 70%)"}}/>
+        <div style={{fontSize:11,color:"#c9a96e",letterSpacing:6,marginBottom:8,fontWeight:500}}>每日古诗 · 日积月累</div>
+        <div style={{fontSize:32,fontWeight:800,color:"#3a2a14",letterSpacing:6,
+          fontFamily:"'Noto Serif SC','STSong','SimSun',serif",marginBottom:8}}>初中必背古诗词</div>
+        <div style={{fontSize:13,color:"#8b7355",marginBottom:20}}>七至九年级 · {totalPoems}首经典 · 中考核心篇目</div>
+        <div style={{display:"flex",gap:12,justifyContent:"center"}}>
+          {[{v:masteredCount,l:"已掌握",c:"#7a4f1a"},{v:totalPoems-masteredCount,l:"待学习",c:"#4a7c59"},{v:streak,l:"连续天数",c:"#c44"}].map((s,i)=>(
+            <div key={i} style={{padding:"12px 18px",background:"rgba(255,255,255,0.6)",borderRadius:12,backdropFilter:"blur(8px)"}}>
+              <div style={{fontSize:24,fontWeight:800,color:s.c}}>{s.v}</div>
+              <div style={{fontSize:11,color:"#999"}}>{s.l}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+      <div style={{padding:"16px 20px",background:"#fff",borderRadius:14,boxShadow:"0 2px 12px rgba(0,0,0,0.04)",marginBottom:16,border:"1px solid rgba(0,0,0,0.04)"}}>
+        <div style={{display:"flex",justifyContent:"space-between",marginBottom:8}}>
+          <span style={{fontSize:13,color:"#666",fontWeight:500}}>总体进度</span>
+          <span style={{fontSize:13,color:"#7a4f1a",fontWeight:700}}>{Math.round(masteredCount/totalPoems*100)}%</span>
+        </div>
+        <div style={{height:8,background:"rgba(120,80,40,0.08)",borderRadius:4,overflow:"hidden"}}>
+          <div style={{height:"100%",borderRadius:4,background:"linear-gradient(90deg, #c9a96e 0%, #8b6914 100%)",
+            width:`${masteredCount/totalPoems*100}%`,transition:"width 0.8s cubic-bezier(0.4,0,0.2,1)"}}/>
+        </div>
+      </div>
+      <div style={{display:"flex",flexDirection:"column",gap:10}}>
+        <button onClick={()=>{setCardIdx(0);setFlipped(false);setShowAnswer(false);setView("study");}} style={{
+          padding:"16px 20px",border:"none",borderRadius:14,background:"linear-gradient(135deg, #3a2a14 0%, #7a4f1a 100%)",
+          color:"#fff",fontSize:15,cursor:"pointer",fontWeight:700,boxShadow:"0 4px 16px rgba(58,42,20,0.2)",
+          display:"flex",alignItems:"center",justifyContent:"space-between",letterSpacing:1}}>
+          <span>今日学习（3首）</span><span style={{fontSize:20}}>→</span>
+        </button>
+        <div style={{display:"flex",gap:10}}>
+          <button onClick={()=>startReview("unmastered")} style={{flex:1,padding:"14px 0",border:"1px solid rgba(74,124,89,0.3)",
+            borderRadius:14,background:"rgba(74,124,89,0.04)",color:"#4a7c59",fontSize:14,cursor:"pointer",fontWeight:600}}>复习未掌握</button>
+          <button onClick={()=>startReview("mastered")} style={{flex:1,padding:"14px 0",border:"1px solid rgba(120,80,40,0.2)",
+            borderRadius:14,background:"rgba(120,80,40,0.04)",color:"#7a4f1a",fontSize:14,cursor:"pointer",fontWeight:600}}>巩固已掌握</button>
+        </div>
+        <button onClick={()=>startReview("all")} style={{padding:"14px 0",border:"1px solid rgba(0,0,0,0.08)",borderRadius:14,
+          background:"#fff",color:"#666",fontSize:14,cursor:"pointer",fontWeight:500}}>全部诗词随机复习</button>
+      </div>
+      <div style={{marginTop:20,padding:"16px 20px",background:"#fff",borderRadius:14,boxShadow:"0 2px 12px rgba(0,0,0,0.04)",border:"1px solid rgba(0,0,0,0.04)"}}>
+        <div style={{fontSize:13,color:"#666",fontWeight:600,marginBottom:12}}>今日推荐</div>
+        {todayPoems.map((p,i)=>(
+          <div key={p.id} style={{padding:"10px 0",borderBottom:i<2?"1px solid rgba(0,0,0,0.04)":"none",
+            display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+            <div>
+              <span style={{fontSize:14,fontWeight:600,color:"#3a2a14",fontFamily:"'Noto Serif SC','STSong',serif"}}>{p.title}</span>
+              <span style={{fontSize:12,color:"#999",marginLeft:8}}>[{p.dynasty}] {p.author}</span>
+            </div>
+            <div style={{display:"flex",gap:4,alignItems:"center"}}>
+              <span style={{fontSize:10,color:"#8b6914",background:"rgba(139,105,20,0.08)",padding:"2px 8px",borderRadius:8}}>{p.grade}</span>
+              {progress[p.id]?.mastered&&<span style={{fontSize:10,color:"#2d7d46",background:"rgba(45,125,70,0.08)",padding:"2px 8px",borderRadius:8}}>已掌握</span>}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+
+  const renderStats=()=>{
+    const byGrade={};
+    POEMS.forEach(p=>{if(!byGrade[p.grade])byGrade[p.grade]={total:0,mastered:0};byGrade[p.grade].total++;if(progress[p.id]?.mastered)byGrade[p.grade].mastered++;});
+    return(
+      <div style={{maxWidth:520,margin:"0 auto",padding:"0 16px"}}>
+        <div style={{padding:"24px 20px",background:"#fff",borderRadius:16,boxShadow:"0 2px 12px rgba(0,0,0,0.04)",marginBottom:16,border:"1px solid rgba(0,0,0,0.04)"}}>
+          <div style={{fontSize:18,fontWeight:700,color:"#3a2a14",marginBottom:16,fontFamily:"'Noto Serif SC','STSong',serif"}}>学习统计</div>
+          <div style={{display:"flex",gap:12,marginBottom:20}}>
+            <div style={{flex:1,padding:"16px 12px",borderRadius:12,background:"linear-gradient(135deg, rgba(201,169,110,0.08) 0%, rgba(139,105,20,0.08) 100%)",textAlign:"center"}}>
+              <div style={{fontSize:28,fontWeight:800,color:"#7a4f1a"}}>{masteredCount}/{totalPoems}</div>
+              <div style={{fontSize:11,color:"#999",marginTop:2}}>已掌握/总数</div>
+            </div>
+            <div style={{flex:1,padding:"16px 12px",borderRadius:12,background:"linear-gradient(135deg, rgba(74,124,89,0.08) 0%, rgba(45,125,70,0.08) 100%)",textAlign:"center"}}>
+              <div style={{fontSize:28,fontWeight:800,color:"#2d7d46"}}>{streak}</div>
+              <div style={{fontSize:11,color:"#999",marginTop:2}}>连续打卡天数</div>
+            </div>
+          </div>
+          <div style={{fontSize:14,fontWeight:600,color:"#666",marginBottom:12}}>分册进度</div>
+          {Object.entries(byGrade).sort().map(([grade,data])=>{
+            const pct=Math.round(data.mastered/data.total*100);
+            return(<div key={grade} style={{marginBottom:14}}>
+              <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
+                <span style={{fontSize:13,color:"#666"}}>{grade}</span>
+                <span style={{fontSize:12,color:"#999"}}>{data.mastered}/{data.total}</span>
+              </div>
+              <div style={{height:6,background:"rgba(0,0,0,0.06)",borderRadius:3,overflow:"hidden"}}>
+                <div style={{height:"100%",borderRadius:3,background:pct===100?"#2d7d46":"linear-gradient(90deg, #c9a96e, #8b6914)",
+                  width:`${pct}%`,transition:"width 0.6s"}}/>
+              </div>
+            </div>);
+          })}
+        </div>
+        <div style={{padding:"20px",background:"#fff",borderRadius:16,boxShadow:"0 2px 12px rgba(0,0,0,0.04)",border:"1px solid rgba(0,0,0,0.04)"}}>
+          <div style={{fontSize:14,fontWeight:600,color:"#666",marginBottom:12}}>全部诗词</div>
+          {POEMS.map(p=>{const isM=progress[p.id]?.mastered;const rc=progress[p.id]?.reviewed||0;
+            return(<div key={p.id} style={{padding:"10px 0",borderBottom:"1px solid rgba(0,0,0,0.04)",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+              <div style={{display:"flex",alignItems:"center",gap:8}}>
+                <div style={{width:22,height:22,borderRadius:"50%",background:isM?"#2d7d46":"rgba(0,0,0,0.06)",
+                  display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,color:isM?"#fff":"#999",fontWeight:600,flexShrink:0}}>
+                  {isM?"✓":p.id}</div>
+                <div><div style={{fontSize:13,fontWeight:500,color:"#3a2a14",fontFamily:"'Noto Serif SC','STSong',serif"}}>{p.title}</div>
+                  <div style={{fontSize:11,color:"#999"}}>[{p.dynasty}] {p.author} · {p.grade}</div></div>
+              </div>
+              {rc>0&&<span style={{fontSize:10,color:"#999"}}>{rc}次</span>}
+            </div>);
+          })}
+        </div>
+        <button onClick={()=>setShowResetConfirm(true)} style={{width:"100%",padding:"14px 0",border:"1px solid rgba(200,50,50,0.2)",
+          borderRadius:14,background:"rgba(200,50,50,0.04)",color:"#c44",fontSize:14,cursor:"pointer",marginTop:16,marginBottom:20}}>
+          {showResetConfirm?"确认重置？再点一次":"重置所有进度"}</button>
+        {showResetConfirm&&<button onClick={()=>{setProgress({});setStreak(0);setShowResetConfirm(false);}} style={{
+          width:"100%",padding:"14px 0",border:"none",borderRadius:14,background:"#c44",color:"#fff",fontSize:14,
+          cursor:"pointer",marginTop:-12,marginBottom:20,fontWeight:600}}>确认重置所有数据</button>}
+      </div>
+    );
+  };
+
+  return(
+    <div style={{minHeight:"100vh",background:"linear-gradient(180deg, #faf7f2 0%, #f2ece2 50%, #faf7f2 100%)",
+      fontFamily:"-apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif",paddingBottom:24}}>
+      <div style={{textAlign:"center",padding:"20px 16px 12px"}}>
+        <div style={{fontSize:16,fontWeight:700,color:"#3a2a14",letterSpacing:3,fontFamily:"'Noto Serif SC','STSong','SimSun',serif"}}>
+          初中必背古诗词 · 每日卡片</div>
+        <div style={{fontSize:11,color:"#b8a88a",marginTop:4}}>
+          {new Date().toLocaleDateString("zh-CN",{month:"long",day:"numeric",weekday:"long"})}
+          {streak>0&&<span style={{marginLeft:8,color:"#c44"}}>连续打卡 {streak} 天</span>}
+        </div>
+      </div>
+      {renderNav()}
+      <div style={{opacity:fadeIn?1:0,transform:fadeIn?"translateY(0)":"translateY(8px)",transition:"all 0.3s ease",padding:"16px 0"}}>
+        {view==="home"&&renderHome()}
+        {(view==="study"||view==="review")&&renderCard(currentPoem,pool,cardIdx)}
+        {view==="quiz"&&renderQuiz()}
+        {view==="stats"&&renderStats()}
+      </div>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
+</script>
+</body>
+</html>
