@@ -17,6 +17,10 @@
 <script type="text/babel">
 const { useState, useEffect, useCallback } = React;
 
+/* ═══════════════════════════════════════════════
+   初中语文必背古诗词 · 每日学习卡片
+   ═══════════════════════════════════════════════ */
+
 const POEMS = [
 {
     id: 1,
@@ -976,203 +980,516 @@ const POEMS = [
 }
 ];
 
-function getDayOfYear(){const now=new Date();const start=new Date(now.getFullYear(),0,0);return Math.floor((now-start)/86400000);}
-function seededShuffle(arr,seed){const a=[...arr];let s=seed;for(let i=a.length-1;i>0;i--){s=(s*16807+7)%2147483647;const j=s%(i+1);[a[i],a[j]]=[a[j],a[i]];}return a;}
-function getTodayPoems(){const day=getDayOfYear()+new Date().getFullYear()*366;return seededShuffle(POEMS,day).slice(0,3);}
+// ═══════════ 工具函数 ═══════════
+function getDayOfYear() {
+  const now = new Date();
+  const start = new Date(now.getFullYear(), 0, 0);
+  return Math.floor((now - start) / 86400000);
+}
 
-function App(){
-  const [view,setView]=useState("home");
-  const [cardIdx,setCardIdx]=useState(0);
-  const [flipped,setFlipped]=useState(false);
-  const [showAnswer,setShowAnswer]=useState(false);
-  const [quizAnswers,setQuizAnswers]=useState({});
-  const [quizSubmitted,setQuizSubmitted]=useState(false);
-  const [progress,setProgress]=useState({});
-  const [todayPoems]=useState(getTodayPoems);
-  const [streak,setStreak]=useState(1);
-  const [slideDir,setSlideDir]=useState("next");
-  const [animating,setAnimating]=useState(false);
-  const [reviewPool,setReviewPool]=useState([]);
-  const [fadeIn,setFadeIn]=useState(true);
-  const [showResetConfirm,setShowResetConfirm]=useState(false);
+function seededShuffle(arr, seed) {
+  const a = [...arr];
+  let s = seed;
+  for (let i = a.length - 1; i > 0; i--) {
+    s = (s * 16807 + 7) % 2147483647;
+    const j = s % (i + 1);
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
 
-  const today=new Date().toISOString().slice(0,10);
-  const masteredCount=Object.values(progress).filter(p=>p.mastered).length;
-  const totalPoems=POEMS.length;
+function normalizeAnswer(str) {
+  return str.replace(/[\s\u3000\uff0c\u3002\uff01\uff1f\u3001\uff1b\uff1a\u201c\u201d\u2018\u2019\uff08\uff09\u300a\u300b\u3010\u3011\u00b7\u2014\u2026~\uff5e,.!?;:\"'()\[\]\-]/g, "").trim();
+}
 
-  useEffect(()=>{setFadeIn(false);const t=setTimeout(()=>setFadeIn(true),50);return()=>clearTimeout(t);},[view]);
+function getTodayPoems() {
+  const day = getDayOfYear() + new Date().getFullYear() * 366;
+  const gradeOrder = { "\u4e03\u4e0a": 1, "\u4e03\u4e0b": 2, "\u516b\u4e0a": 3, "\u516b\u4e0b": 4, "\u4e5d\u4e0a": 5, "\u4e5d\u4e0b": 6 };
+  const groups = {};
+  POEMS.forEach(p => { if (!groups[p.grade]) groups[p.grade] = []; groups[p.grade].push(p); });
+  const ordered = [];
+  ["\u4e03\u4e0a","\u4e03\u4e0b","\u516b\u4e0a","\u516b\u4e0b","\u4e5d\u4e0a","\u4e5d\u4e0b"].forEach(g => {
+    if (groups[g]) ordered.push(...seededShuffle(groups[g], day));
+  });
+  const picked = [];
+  let seed = day;
+  while (picked.length < 3 && picked.length < ordered.length) {
+    seed = (seed * 16807 + 7) % 2147483647;
+    const candidate = ordered[seed % ordered.length];
+    if (!picked.includes(candidate)) picked.push(candidate);
+  }
+  picked.sort((a, b) => (gradeOrder[a.grade] || 9) - (gradeOrder[b.grade] || 9) || a.id - b.id);
+  return picked;
+}
 
-  const markMastered=useCallback((id)=>{setProgress(prev=>({...prev,[id]:{...prev[id],mastered:!prev[id]?.mastered,lastReview:today}}));},[today]);
-  const markReviewed=useCallback((id)=>{setProgress(prev=>({...prev,[id]:{...prev[id],reviewed:(prev[id]?.reviewed||0)+1,lastReview:today}}));},[today]);
+function loadProgress() {
+  try {
+    const s = localStorage.getItem("poetry_progress");
+    if (s) return JSON.parse(s);
+  } catch(e) {}
+  return {};
+}
 
-  const currentPoem=view==="review"?reviewPool[cardIdx]:todayPoems[cardIdx];
-  const pool=view==="review"?reviewPool:todayPoems;
+function saveProgress(p) {
+  try { localStorage.setItem("poetry_progress", JSON.stringify(p)); } catch(e) {}
+}
 
-  const goNext=useCallback(()=>{if(cardIdx<pool.length-1){setSlideDir("next");setAnimating(true);setFlipped(false);setShowAnswer(false);setTimeout(()=>{setCardIdx(i=>i+1);setAnimating(false);},250);}},[cardIdx,pool]);
-  const goPrev=useCallback(()=>{if(cardIdx>0){setSlideDir("prev");setAnimating(true);setFlipped(false);setShowAnswer(false);setTimeout(()=>{setCardIdx(i=>i-1);setAnimating(false);},250);}},[cardIdx]);
+function loadStreak() {
+  try {
+    const s = localStorage.getItem("poetry_streak");
+    return s ? JSON.parse(s) : { count: 0, lastDate: "" };
+  } catch(e) {}
+  return { count: 0, lastDate: "" };
+}
 
-  const startReview=useCallback((filter)=>{let p;if(filter==="mastered")p=POEMS.filter(x=>progress[x.id]?.mastered);else if(filter==="unmastered")p=POEMS.filter(x=>!progress[x.id]?.mastered);else p=[...POEMS];if(p.length===0)p=[...POEMS];setReviewPool(seededShuffle(p,Date.now()));setCardIdx(0);setFlipped(false);setShowAnswer(false);setView("review");},[progress]);
+function saveStreak(s) {
+  try { localStorage.setItem("poetry_streak", JSON.stringify(s)); } catch(e) {}
+}
 
-  const startQuiz=useCallback(()=>{setQuizAnswers({});setQuizSubmitted(false);setView("quiz");},[]);
-  const submitQuiz=useCallback(()=>{setQuizSubmitted(true);const p=pool[cardIdx];if(p)markReviewed(p.id);},[pool,cardIdx,markReviewed]);
+// ═══════════ 主组件 ═══════════
+function App() {
+  const [view, setView] = useState("home"); // home | study | review | quiz | stats
+  const [cardIdx, setCardIdx] = useState(0);
+  const [flipped, setFlipped] = useState(false);
+  const [showAnswer, setShowAnswer] = useState(false);
+  const [quizAnswers, setQuizAnswers] = useState({});
+  const [quizSubmitted, setQuizSubmitted] = useState(false);
+  const [progress, setProgress] = useState(loadProgress);
+  const [todayPoems] = useState(getTodayPoems);
+  const [streakData] = useState(loadStreak);
+  const [streak, setStreak] = useState(streakData.count);
+  const [lastDate, setLastDate] = useState(streakData.lastDate);
+  const [slideDir, setSlideDir] = useState("next");
+  const [animating, setAnimating] = useState(false);
+  const [reviewFilter, setReviewFilter] = useState("unmastered"); // all | unmastered | mastered
+  const [reviewPool, setReviewPool] = useState([]);
+  const [showResetConfirm, setShowResetConfirm] = useState(false);
+  const [quizPool, setQuizPool] = useState([]);
+  const [fadeIn, setFadeIn] = useState(true);
 
-  const getScore=useCallback(()=>{const p=pool[cardIdx]||POEMS[0];if(!p)return{correct:0,total:0};let c=0;p.fillBlanks.forEach((fb,i)=>{if((quizAnswers[i]||"").trim().replace(/\s+/g," ")===fb.a)c++;});return{correct:c,total:p.fillBlanks.length};},[quizAnswers,pool,cardIdx]);
+  const today = new Date().toISOString().slice(0, 10);
+  const masteredCount = Object.values(progress).filter(p => p.mastered).length;
+  const totalPoems = POEMS.length;
 
-  const renderNav=()=>(
-    <div style={{display:"flex",gap:4,padding:"0 16px",marginBottom:8,borderBottom:"1px solid rgba(120,80,40,0.12)"}}>
-      {[{key:"home",label:"首页",icon:"🏠"},{key:"study",label:"学习",icon:"📖"},{key:"review",label:"复习",icon:"🔄"},{key:"stats",label:"统计",icon:"📊"}].map(item=>(
-        <button key={item.key} onClick={()=>{
-          if(item.key==="review")startReview("unmastered");
-          else if(item.key==="study"){setCardIdx(0);setFlipped(false);setShowAnswer(false);setView("study");}
+  // 连续打卡
+  useEffect(() => {
+    if (lastDate !== today) {
+      const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+      if (lastDate === yesterday) {
+        setStreak(s => s + 1);
+      } else if (lastDate) {
+        setStreak(1);
+      } else {
+        setStreak(1);
+      }
+      setLastDate(today);
+    }
+  }, [lastDate, today]);
+
+  // 保存连续打卡
+  useEffect(() => { saveStreak({ count: streak, lastDate }); }, [streak, lastDate]);
+
+  // 切换视图动画
+  useEffect(() => {
+    setFadeIn(false);
+    const t = setTimeout(() => setFadeIn(true), 50);
+    return () => clearTimeout(t);
+  }, [view]);
+
+  const markMastered = useCallback((id) => {
+    setProgress(prev => {
+      const next = { ...prev, [id]: { ...prev[id], mastered: !prev[id]?.mastered, lastReview: today } };
+      saveProgress(next);
+      return next;
+    });
+  }, [today]);
+
+  const markReviewed = useCallback((id) => {
+    setProgress(prev => {
+      const next = { ...prev, [id]: { ...prev[id], reviewed: (prev[id]?.reviewed || 0) + 1, lastReview: today } };
+      saveProgress(next);
+      return next;
+    });
+  }, [today]);
+
+  const currentPoem = view === "review" ? reviewPool[cardIdx] : todayPoems[cardIdx];
+
+  const goNext = useCallback(() => {
+    const pool = view === "review" ? reviewPool : todayPoems;
+    if (cardIdx < pool.length - 1) {
+      setSlideDir("next");
+      setAnimating(true);
+      setFlipped(false);
+      setShowAnswer(false);
+      setTimeout(() => { setCardIdx(i => i + 1); setAnimating(false); }, 250);
+    }
+  }, [cardIdx, view, todayPoems, reviewPool]);
+
+  const goPrev = useCallback(() => {
+    if (cardIdx > 0) {
+      setSlideDir("prev");
+      setAnimating(true);
+      setFlipped(false);
+      setShowAnswer(false);
+      setTimeout(() => { setCardIdx(i => i - 1); setAnimating(false); }, 250);
+    }
+  }, [cardIdx]);
+
+  const startReview = useCallback((filter) => {
+    let pool;
+    if (filter === "mastered") pool = POEMS.filter(p => progress[p.id]?.mastered);
+    else if (filter === "unmastered") pool = POEMS.filter(p => !progress[p.id]?.mastered);
+    else pool = [...POEMS];
+    if (pool.length === 0) pool = [...POEMS];
+    setReviewPool(seededShuffle(pool, Date.now()));
+    setReviewFilter(filter);
+    setCardIdx(0);
+    setFlipped(false);
+    setShowAnswer(false);
+    setView("review");
+  }, [progress]);
+
+  const startQuiz = useCallback(() => {
+    const pool = view === "review" ? reviewPool : todayPoems;
+    const poem = pool[cardIdx];
+    if (!poem) return;
+    setQuizPool([...pool]);
+    setQuizAnswers({});
+    setQuizSubmitted(false);
+    setView("quiz");
+  }, [view, reviewPool, todayPoems, cardIdx]);
+
+  const submitQuiz = useCallback(() => {
+    setQuizSubmitted(true);
+    const poem = quizPool[cardIdx] || POEMS[0];
+    if (poem) markReviewed(poem.id);
+  }, [quizPool, cardIdx, markReviewed]);
+
+  const getScore = useCallback(() => {
+    const poem = quizPool[cardIdx];
+    if (!poem) return { correct: 0, total: 0 };
+    let correct = 0;
+    poem.fillBlanks.forEach((fb, i) => {
+      const ans = normalizeAnswer(quizAnswers[i] || "");
+      const expected = normalizeAnswer(fb.a);
+      if (ans === expected && ans !== "") correct++;
+    });
+    return { correct, total: poem.fillBlanks.length };
+  }, [quizAnswers, quizPool, cardIdx]);
+
+  // ═══════════ 渲染函数 ═══════════
+
+  const renderNav = () => (
+    <div style={{
+      display: "flex", gap: 4, padding: "0 16px", marginBottom: 8,
+      borderBottom: "1px solid rgba(120,80,40,0.12)",
+    }}>
+      {[
+        { key: "home", label: "首页", icon: "🏠" },
+        { key: "study", label: "学习", icon: "📖" },
+        { key: "review", label: "复习", icon: "🔄" },
+        { key: "stats", label: "统计", icon: "📊" },
+      ].map(item => (
+        <button key={item.key} onClick={() => {
+          if (item.key === "review") startReview("unmastered");
+          else if (item.key === "study") { setCardIdx(0); setFlipped(false); setShowAnswer(false); setView("study"); }
           else setView(item.key);
-        }} style={{flex:1,padding:"10px 0",border:"none",borderRadius:0,
-          background:view===item.key?"rgba(120,80,40,0.08)":"transparent",
-          color:view===item.key?"#7a4f1a":"#999",fontWeight:view===item.key?700:400,
-          fontSize:13,cursor:"pointer",transition:"all 0.2s",
-          borderBottom:view===item.key?"2px solid #7a4f1a":"2px solid transparent",
-          fontFamily:"system-ui, sans-serif"}}>
-          <div style={{fontSize:18}}>{item.icon}</div><div>{item.label}</div>
+        }} style={{
+          flex: 1, padding: "10px 0", border: "none", borderRadius: 0,
+          background: view === item.key ? "rgba(120,80,40,0.08)" : "transparent",
+          color: view === item.key ? "#7a4f1a" : "#999",
+          fontWeight: view === item.key ? 700 : 400,
+          fontSize: 13, cursor: "pointer", transition: "all 0.2s",
+          borderBottom: view === item.key ? "2px solid #7a4f1a" : "2px solid transparent",
+          fontFamily: "system-ui, sans-serif",
+        }}>
+          <div style={{ fontSize: 18 }}>{item.icon}</div>
+          <div>{item.label}</div>
         </button>
       ))}
     </div>
   );
 
-  const renderCard=(poem,p,idx)=>{
-    if(!poem)return <div style={{textAlign:"center",padding:40,color:"#999"}}>暂无卡片</div>;
-    const isM=progress[poem.id]?.mastered;const rc=progress[poem.id]?.reviewed||0;
-    return(
-      <div style={{perspective:1200,maxWidth:520,margin:"0 auto",width:"100%",
-        opacity:animating?0:1,transform:animating?`translateX(${slideDir==="next"?60:-60}px)`:"translateX(0)",
-        transition:"all 0.3s cubic-bezier(0.4,0,0.2,1)"}}>
-        <div style={{display:"flex",justifyContent:"center",gap:6,marginBottom:12}}>
-          {p.map((_,i)=>(<div key={i} style={{width:i===idx?20:6,height:6,borderRadius:3,
-            background:i===idx?"#7a4f1a":"rgba(120,80,40,0.2)",transition:"all 0.3s"}}/>))}
+  const renderCard = (poem, pool, idx) => {
+    if (!poem) return <div style={{ textAlign: "center", padding: 40, color: "#999" }}>暂无卡片</div>;
+    const isMastered = progress[poem.id]?.mastered;
+    const reviewCount = progress[poem.id]?.reviewed || 0;
+
+    return (
+      <div style={{
+        perspective: 1200,
+        maxWidth: 520, margin: "0 auto", width: "100%",
+        opacity: animating ? 0 : 1,
+        transform: animating ? `translateX(${slideDir === "next" ? 60 : -60}px)` : "translateX(0)",
+        transition: "all 0.3s cubic-bezier(0.4,0,0.2,1)",
+      }}>
+        {/* 卡片指示器 */}
+        <div style={{
+          display: "flex", justifyContent: "center", gap: 6, marginBottom: 12,
+        }}>
+          {pool.map((_, i) => (
+            <div key={i} style={{
+              width: i === idx ? 20 : 6, height: 6, borderRadius: 3,
+              background: i === idx ? "#7a4f1a" : "rgba(120,80,40,0.2)",
+              transition: "all 0.3s",
+            }} />
+          ))}
         </div>
-        <div onClick={()=>setFlipped(!flipped)} style={{position:"relative",width:"100%",minHeight:380,
-          cursor:"pointer",transformStyle:"preserve-3d",
-          transition:"transform 0.6s cubic-bezier(0.4,0,0.2,1)",
-          transform:flipped?"rotateY(180deg)":"rotateY(0)"}}>
-          <div style={{position:"absolute",width:"100%",minHeight:380,backfaceVisibility:"hidden",
-            background:"linear-gradient(145deg, #fdf8f0 0%, #f5ead6 50%, #fdf8f0 100%)",
-            borderRadius:16,padding:"28px 24px",
-            boxShadow:"0 4px 24px rgba(120,80,40,0.10), 0 1px 3px rgba(0,0,0,0.06)",
-            border:"1px solid rgba(120,80,40,0.12)",display:"flex",flexDirection:"column"}}>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
-              <span style={{fontSize:11,color:"#8b6914",background:"rgba(139,105,20,0.08)",padding:"3px 10px",borderRadius:12,fontWeight:500}}>{poem.grade}</span>
-              <div style={{display:"flex",gap:6}}>
-                {isM&&<span style={{fontSize:11,color:"#2d7d46",background:"rgba(45,125,70,0.08)",padding:"3px 10px",borderRadius:12}}>已掌握</span>}
-                <span style={{fontSize:11,color:"#999",background:"rgba(0,0,0,0.04)",padding:"3px 10px",borderRadius:12}}>复习{rc}次</span>
+
+        {/* 翻转卡片 */}
+        <div onClick={() => setFlipped(!flipped)} style={{
+          position: "relative", width: "100%", minHeight: 380,
+          cursor: "pointer", transformStyle: "preserve-3d",
+          transition: "transform 0.6s cubic-bezier(0.4,0,0.2,1)",
+          transform: flipped ? "rotateY(180deg)" : "rotateY(0)",
+        }}>
+          {/* ── 正面 ── */}
+          <div style={{
+            position: "absolute", width: "100%", minHeight: 380,
+            backfaceVisibility: "hidden",
+            background: "linear-gradient(145deg, #fdf8f0 0%, #f5ead6 50%, #fdf8f0 100%)",
+            borderRadius: 16, padding: "28px 24px",
+            boxShadow: "0 4px 24px rgba(120,80,40,0.10), 0 1px 3px rgba(0,0,0,0.06)",
+            border: "1px solid rgba(120,80,40,0.12)",
+            display: "flex", flexDirection: "column",
+          }}>
+            {/* 顶部标签 */}
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+              <span style={{
+                fontSize: 11, color: "#8b6914", background: "rgba(139,105,20,0.08)",
+                padding: "3px 10px", borderRadius: 12,
+                fontWeight: 500,
+              }}>{poem.grade}</span>
+              <div style={{ display: "flex", gap: 6 }}>
+                {isMastered && <span style={{
+                  fontSize: 11, color: "#2d7d46", background: "rgba(45,125,70,0.08)",
+                  padding: "3px 10px", borderRadius: 12,
+                }}>已掌握</span>}
+                <span style={{
+                  fontSize: 11, color: "#999", background: "rgba(0,0,0,0.04)",
+                  padding: "3px 10px", borderRadius: 12,
+                }}>复习{reviewCount}次</span>
               </div>
             </div>
-            <div style={{textAlign:"center",flex:1,display:"flex",flexDirection:"column",justifyContent:"center"}}>
-              <div style={{fontSize:28,fontWeight:700,color:"#3a2a14",letterSpacing:4,marginBottom:8,
-                fontFamily:"'Noto Serif SC','STSong','SimSun',serif"}}>{poem.title}</div>
-              <div style={{fontSize:14,color:"#8b7355",marginBottom:24}}>[{poem.dynasty}] {poem.author}</div>
-              <div style={{fontSize:16,color:"#5a3e1b",lineHeight:1.8,padding:"16px 20px",margin:"0 auto",
-                borderLeft:"3px solid #c9a96e",background:"rgba(201,169,110,0.06)",borderRadius:"0 8px 8px 0",
-                fontFamily:"'Noto Serif SC','STSong','SimSun',serif",maxWidth:"90%"}}>{poem.keyLines}</div>
+
+            {/* 标题 */}
+            <div style={{ textAlign: "center", flex: 1, display: "flex", flexDirection: "column", justifyContent: "center" }}>
+              <div style={{
+                fontSize: 28, fontWeight: 700, color: "#3a2a14",
+                letterSpacing: 4, marginBottom: 8,
+                fontFamily: "'Noto Serif SC', 'STSong', 'SimSun', serif",
+              }}>{poem.title}</div>
+              <div style={{ fontSize: 14, color: "#8b7355", marginBottom: 24 }}>
+                [{poem.dynasty}] {poem.author}
+              </div>
+
+              {/* 名句 */}
+              <div style={{
+                fontSize: 16, color: "#5a3e1b", lineHeight: 1.8,
+                padding: "16px 20px", margin: "0 auto",
+                borderLeft: "3px solid #c9a96e",
+                background: "rgba(201,169,110,0.06)",
+                borderRadius: "0 8px 8px 0",
+                fontFamily: "'Noto Serif SC', 'STSong', 'SimSun', serif",
+                maxWidth: "90%",
+              }}>{poem.keyLines}</div>
             </div>
-            <div style={{textAlign:"center",fontSize:12,color:"#c9a96e",paddingTop:12,borderTop:"1px solid rgba(201,169,110,0.2)"}}>
+
+            {/* 底部提示 */}
+            <div style={{
+              textAlign: "center", fontSize: 12, color: "#c9a96e",
+              paddingTop: 12, borderTop: "1px solid rgba(201,169,110,0.2)",
+            }}>
               点击翻转查看完整内容 →
             </div>
           </div>
-          <div style={{position:"absolute",width:"100%",minHeight:380,backfaceVisibility:"hidden",
-            transform:"rotateY(180deg)",
-            background:"linear-gradient(145deg, #f0f5ee 0%, #e8efe4 50%, #f0f5ee 100%)",
-            borderRadius:16,padding:"24px 20px",
-            boxShadow:"0 4px 24px rgba(60,100,60,0.10), 0 1px 3px rgba(0,0,0,0.06)",
-            border:"1px solid rgba(60,100,60,0.12)",overflow:"auto"}}>
-            <div style={{fontSize:15,color:"#2a3a2a",lineHeight:2,textAlign:"center",padding:"12px 0",marginBottom:12,
-              borderBottom:"1px solid rgba(60,100,60,0.15)",
-              fontFamily:"'Noto Serif SC','STSong','SimSun',serif",whiteSpace:"pre-line"}}>
-              <div style={{fontSize:12,color:"#6a8a6a",marginBottom:8,fontFamily:"system-ui"}}>
+
+          {/* ── 背面 ── */}
+          <div style={{
+            position: "absolute", width: "100%", minHeight: 380,
+            backfaceVisibility: "hidden",
+            transform: "rotateY(180deg)",
+            background: "linear-gradient(145deg, #f0f5ee 0%, #e8efe4 50%, #f0f5ee 100%)",
+            borderRadius: 16, padding: "24px 20px",
+            boxShadow: "0 4px 24px rgba(60,100,60,0.10), 0 1px 3px rgba(0,0,0,0.06)",
+            border: "1px solid rgba(60,100,60,0.12)",
+            overflow: "auto",
+          }}>
+            {/* 原文 */}
+            <div style={{
+              fontSize: 15, color: "#2a3a2a", lineHeight: 2, textAlign: "center",
+              padding: "12px 0", marginBottom: 12,
+              borderBottom: "1px solid rgba(60,100,60,0.15)",
+              fontFamily: "'Noto Serif SC', 'STSong', 'SimSun', serif",
+              whiteSpace: "pre-line",
+            }}>
+              <div style={{ fontSize: 12, color: "#6a8a6a", marginBottom: 8, fontFamily: "system-ui" }}>
                 【{poem.dynasty}】{poem.author} · {poem.title}
-              </div>{poem.text}
+              </div>
+              {poem.text}
             </div>
-            {showAnswer&&<>
-              <div style={{fontSize:12.5,color:"#5a6a5a",lineHeight:1.8,padding:"10px 12px",marginBottom:10,
-                background:"rgba(60,100,60,0.04)",borderRadius:8}}>
-                <div style={{fontWeight:600,marginBottom:4,color:"#3a5a3a",fontSize:12}}>译文</div>{poem.translation}
+
+            {/* 译文 */}
+            {showAnswer && (
+              <div style={{
+                fontSize: 12.5, color: "#5a6a5a", lineHeight: 1.8,
+                padding: "10px 12px", marginBottom: 10,
+                background: "rgba(60,100,60,0.04)",
+                borderRadius: 8,
+              }}>
+                <div style={{ fontWeight: 600, marginBottom: 4, color: "#3a5a3a", fontSize: 12 }}>译文</div>
+                {poem.translation}
               </div>
-              <div style={{fontSize:12,color:"#6a4a2a",padding:"8px 12px",background:"rgba(160,100,40,0.06)",borderRadius:8,marginBottom:10}}>
-                <span style={{fontWeight:600}}>主旨：</span>{poem.theme}
+            )}
+
+            {/* 主题 */}
+            {showAnswer && (
+              <div style={{
+                fontSize: 12, color: "#6a4a2a", padding: "8px 12px",
+                background: "rgba(160,100,40,0.06)", borderRadius: 8, marginBottom: 10,
+              }}>
+                <span style={{ fontWeight: 600 }}>主旨：</span>{poem.theme}
               </div>
-            </>}
-            <div style={{display:"flex",gap:8,marginTop:"auto"}}>
-              {!showAnswer&&<button onClick={e=>{e.stopPropagation();setShowAnswer(true);}} style={{
-                flex:1,padding:"10px 0",border:"none",borderRadius:8,background:"#4a7c59",color:"#fff",fontSize:13,cursor:"pointer",fontWeight:600}}>显示译文与解析</button>}
-              <button onClick={e=>{e.stopPropagation();markMastered(poem.id);}} style={{
-                flex:1,padding:"10px 0",border:"1px solid",borderRadius:8,
-                borderColor:isM?"#2d7d46":"rgba(60,100,60,0.3)",
-                background:isM?"rgba(45,125,70,0.1)":"transparent",
-                color:isM?"#2d7d46":"#5a6a5a",fontSize:13,cursor:"pointer",fontWeight:500}}>
-                {isM?"已掌握 ✓":"标记掌握"}
-              </button>
+            )}
+
+            {/* 操作按钮 */}
+            <div style={{ display: "flex", gap: 8, marginTop: "auto" }}>
+              {!showAnswer && (
+                <button onClick={e => { e.stopPropagation(); setShowAnswer(true); }} style={{
+                  flex: 1, padding: "10px 0", border: "none", borderRadius: 8,
+                  background: "#4a7c59", color: "#fff", fontSize: 13,
+                  cursor: "pointer", fontWeight: 600,
+                }}>显示译文与解析</button>
+              )}
+              <button onClick={e => { e.stopPropagation(); markMastered(poem.id); }} style={{
+                flex: 1, padding: "10px 0", border: "1px solid", borderRadius: 8,
+                borderColor: isMastered ? "#2d7d46" : "rgba(60,100,60,0.3)",
+                background: isMastered ? "rgba(45,125,70,0.1)" : "transparent",
+                color: isMastered ? "#2d7d46" : "#5a6a5a",
+                fontSize: 13, cursor: "pointer", fontWeight: 500,
+              }}>{isMastered ? "已掌握 ✓" : "标记掌握"}</button>
             </div>
           </div>
         </div>
-        <div style={{display:"flex",justifyContent:"space-between",marginTop:16,gap:8}}>
-          <button onClick={goPrev} disabled={idx===0} style={{padding:"10px 20px",border:"1px solid rgba(120,80,40,0.2)",
-            borderRadius:10,background:idx===0?"rgba(0,0,0,0.02)":"#fff",color:idx===0?"#ccc":"#7a4f1a",fontSize:13,
-            cursor:idx===0?"default":"pointer",fontWeight:500}}>← 上一张</button>
-          <button onClick={startQuiz} style={{padding:"10px 16px",border:"none",borderRadius:10,
-            background:"linear-gradient(135deg, #c9a96e 0%, #8b6914 100%)",color:"#fff",fontSize:13,cursor:"pointer",
-            fontWeight:600,boxShadow:"0 2px 8px rgba(139,105,20,0.2)"}}>默写检测</button>
-          <button onClick={goNext} disabled={idx>=p.length-1} style={{padding:"10px 20px",border:"1px solid rgba(120,80,40,0.2)",
-            borderRadius:10,background:idx>=p.length-1?"rgba(0,0,0,0.02)":"#fff",color:idx>=p.length-1?"#ccc":"#7a4f1a",fontSize:13,
-            cursor:idx>=p.length-1?"default":"pointer",fontWeight:500}}>下一张 →</button>
+
+        {/* 导航按钮 */}
+        <div style={{ display: "flex", justifyContent: "space-between", marginTop: 16, gap: 8 }}>
+          <button onClick={goPrev} disabled={idx === 0} style={{
+            padding: "10px 20px", border: "1px solid rgba(120,80,40,0.2)",
+            borderRadius: 10, background: idx === 0 ? "rgba(0,0,0,0.02)" : "#fff",
+            color: idx === 0 ? "#ccc" : "#7a4f1a", fontSize: 13, cursor: idx === 0 ? "default" : "pointer",
+            fontWeight: 500,
+          }}>← 上一张</button>
+
+          <button onClick={startQuiz} style={{
+            padding: "10px 16px", border: "none", borderRadius: 10,
+            background: "linear-gradient(135deg, #c9a96e 0%, #8b6914 100%)",
+            color: "#fff", fontSize: 13, cursor: "pointer", fontWeight: 600,
+            boxShadow: "0 2px 8px rgba(139,105,20,0.2)",
+          }}>默写检测</button>
+
+          <button onClick={goNext} disabled={idx >= pool.length - 1} style={{
+            padding: "10px 20px", border: "1px solid rgba(120,80,40,0.2)",
+            borderRadius: 10, background: idx >= pool.length - 1 ? "rgba(0,0,0,0.02)" : "#fff",
+            color: idx >= pool.length - 1 ? "#ccc" : "#7a4f1a", fontSize: 13,
+            cursor: idx >= pool.length - 1 ? "default" : "pointer", fontWeight: 500,
+          }}>下一张 →</button>
         </div>
       </div>
     );
   };
 
-  const renderQuiz=()=>{
-    const poem=pool[cardIdx]||POEMS[0];
-    const {correct,total}=quizSubmitted?getScore():{correct:0,total:poem.fillBlanks.length};
-    return(
-      <div style={{maxWidth:520,margin:"0 auto",padding:"0 16px"}}>
-        <div style={{background:"linear-gradient(145deg, #fdf8f0 0%, #f5ead6 100%)",borderRadius:16,padding:"24px 20px",
-          boxShadow:"0 4px 24px rgba(120,80,40,0.10)",border:"1px solid rgba(120,80,40,0.12)"}}>
-          <div style={{textAlign:"center",marginBottom:20}}>
-            <div style={{fontSize:11,color:"#c9a96e",marginBottom:4}}>默写检测</div>
-            <div style={{fontSize:20,fontWeight:700,color:"#3a2a14",fontFamily:"'Noto Serif SC','STSong',serif"}}>{poem.title}</div>
-            <div style={{fontSize:13,color:"#8b7355"}}>[{poem.dynasty}] {poem.author}</div>
+  const renderQuiz = () => {
+    const poem = quizPool[cardIdx] || POEMS[0];
+    const { correct, total } = quizSubmitted ? getScore() : { correct: 0, total: poem.fillBlanks.length };
+
+    return (
+      <div style={{ maxWidth: 520, margin: "0 auto", padding: "0 16px" }}>
+        <div style={{
+          background: "linear-gradient(145deg, #fdf8f0 0%, #f5ead6 100%)",
+          borderRadius: 16, padding: "24px 20px",
+          boxShadow: "0 4px 24px rgba(120,80,40,0.10)",
+          border: "1px solid rgba(120,80,40,0.12)",
+        }}>
+          <div style={{ textAlign: "center", marginBottom: 20 }}>
+            <div style={{ fontSize: 11, color: "#c9a96e", marginBottom: 4 }}>默写检测</div>
+            <div style={{
+              fontSize: 20, fontWeight: 700, color: "#3a2a14",
+              fontFamily: "'Noto Serif SC', 'STSong', serif",
+            }}>{poem.title}</div>
+            <div style={{ fontSize: 13, color: "#8b7355" }}>[{poem.dynasty}] {poem.author}</div>
           </div>
-          {poem.fillBlanks.map((fb,i)=>{
-            const isC=quizSubmitted&&(quizAnswers[i]||"").trim().replace(/\s+/g," ")===fb.a;
-            const isW=quizSubmitted&&!isC;
-            return(
-              <div key={i} style={{marginBottom:16,padding:"14px 16px",
-                background:isC?"rgba(45,125,70,0.06)":isW?"rgba(200,50,50,0.06)":"rgba(120,80,40,0.03)",
-                borderRadius:10,border:`1px solid ${isC?"rgba(45,125,70,0.2)":isW?"rgba(200,50,50,0.2)":"rgba(120,80,40,0.08)"}`,
-                transition:"all 0.3s"}}>
-                <div style={{fontSize:16,color:"#3a2a14",marginBottom:10,textAlign:"center",
-                  fontFamily:"'Noto Serif SC','STSong',serif",letterSpacing:2,lineHeight:1.8}}>{fb.q}</div>
-                <input type="text" value={quizAnswers[i]||""} onChange={e=>setQuizAnswers({...quizAnswers,[i]:e.target.value})}
-                  placeholder="填写答案..." disabled={quizSubmitted}
-                  style={{width:"100%",padding:"10px 14px",border:"1px solid rgba(120,80,40,0.15)",borderRadius:8,
-                    fontSize:14,background:quizSubmitted?"rgba(0,0,0,0.02)":"#fff",color:"#3a2a14",outline:"none",
-                    boxSizing:"border-box",textAlign:"center",letterSpacing:2,fontFamily:"'Noto Serif SC','STSong',serif"}}/>
-                {isW&&<div style={{fontSize:12,color:"#c44",marginTop:6,textAlign:"center"}}>正确答案：<span style={{fontWeight:600}}>{fb.a}</span></div>}
-                {isC&&<div style={{fontSize:12,color:"#2d7d46",marginTop:6,textAlign:"center"}}>回答正确</div>}
+
+          {poem.fillBlanks.map((fb, i) => {
+            const isCorrect = quizSubmitted && normalizeAnswer(quizAnswers[i] || "") === normalizeAnswer(fb.a) && normalizeAnswer(quizAnswers[i] || "") !== "";
+            const isWrong = quizSubmitted && !isCorrect;
+            return (
+              <div key={i} style={{
+                marginBottom: 16, padding: "14px 16px",
+                background: isCorrect ? "rgba(45,125,70,0.06)" : isWrong ? "rgba(200,50,50,0.06)" : "rgba(120,80,40,0.03)",
+                borderRadius: 10, border: `1px solid ${isCorrect ? "rgba(45,125,70,0.2)" : isWrong ? "rgba(200,50,50,0.2)" : "rgba(120,80,40,0.08)"}`,
+                transition: "all 0.3s",
+              }}>
+                <div style={{
+                  fontSize: 16, color: "#3a2a14", marginBottom: 10, textAlign: "center",
+                  fontFamily: "'Noto Serif SC', 'STSong', serif",
+                  letterSpacing: 2, lineHeight: 1.8,
+                }}>{fb.q}</div>
+                <input
+                  type="text"
+                  value={quizAnswers[i] || ""}
+                  onChange={e => setQuizAnswers({ ...quizAnswers, [i]: e.target.value })}
+                  placeholder="填写答案..."
+                  disabled={quizSubmitted}
+                  style={{
+                    width: "100%", padding: "10px 14px", border: "1px solid rgba(120,80,40,0.15)",
+                    borderRadius: 8, fontSize: 14, background: quizSubmitted ? "rgba(0,0,0,0.02)" : "#fff",
+                    color: "#3a2a14", outline: "none", boxSizing: "border-box",
+                    textAlign: "center", letterSpacing: 2,
+                    fontFamily: "'Noto Serif SC', 'STSong', serif",
+                  }}
+                />
+                {isWrong && (
+                  <div style={{ fontSize: 12, color: "#c44", marginTop: 6, textAlign: "center" }}>
+                    正确答案：<span style={{ fontWeight: 600 }}>{fb.a}</span>
+                  </div>
+                )}
+                {isCorrect && (
+                  <div style={{ fontSize: 12, color: "#2d7d46", marginTop: 6, textAlign: "center" }}>
+                    回答正确
+                  </div>
+                )}
               </div>
             );
           })}
-          {!quizSubmitted?(
-            <button onClick={submitQuiz} style={{width:"100%",padding:"14px 0",border:"none",borderRadius:10,
-              background:"linear-gradient(135deg, #c9a96e 0%, #8b6914 100%)",color:"#fff",fontSize:15,cursor:"pointer",
-              fontWeight:700,boxShadow:"0 2px 8px rgba(139,105,20,0.2)",letterSpacing:2}}>提交答案</button>
-          ):(
-            <div style={{textAlign:"center"}}>
-              <div style={{fontSize:18,fontWeight:700,marginBottom:12,
-                color:correct===total?"#2d7d46":correct>=total/2?"#8b6914":"#c44"}}>
-                {correct===total?"全部正确！":`${correct}/${total} 正确`}</div>
-              <div style={{display:"flex",gap:8}}>
-                <button onClick={()=>{setQuizAnswers({});setQuizSubmitted(false);}} style={{flex:1,padding:"12px 0",
-                  border:"1px solid rgba(120,80,40,0.2)",borderRadius:10,background:"#fff",color:"#7a4f1a",fontSize:14,
-                  cursor:"pointer",fontWeight:500}}>再试一次</button>
-                <button onClick={()=>{setFlipped(false);setShowAnswer(false);setView("study");}} style={{flex:1,padding:"12px 0",
-                  border:"none",borderRadius:10,background:"#4a7c59",color:"#fff",fontSize:14,cursor:"pointer",fontWeight:600}}>返回学习</button>
+
+          {!quizSubmitted ? (
+            <button onClick={submitQuiz} style={{
+              width: "100%", padding: "14px 0", border: "none", borderRadius: 10,
+              background: "linear-gradient(135deg, #c9a96e 0%, #8b6914 100%)",
+              color: "#fff", fontSize: 15, cursor: "pointer", fontWeight: 700,
+              boxShadow: "0 2px 8px rgba(139,105,20,0.2)",
+              letterSpacing: 2,
+            }}>提交答案</button>
+          ) : (
+            <div style={{ textAlign: "center" }}>
+              <div style={{
+                fontSize: 18, fontWeight: 700, marginBottom: 12,
+                color: correct === total ? "#2d7d46" : correct >= total / 2 ? "#8b6914" : "#c44",
+              }}>
+                {correct === total ? "全部正确！" : `${correct}/${total} 正确`}
+              </div>
+              <div style={{ display: "flex", gap: 8 }}>
+                <button onClick={() => { setQuizAnswers({}); setQuizSubmitted(false); }} style={{
+                  flex: 1, padding: "12px 0", border: "1px solid rgba(120,80,40,0.2)",
+                  borderRadius: 10, background: "#fff", color: "#7a4f1a",
+                  fontSize: 14, cursor: "pointer", fontWeight: 500,
+                }}>再试一次</button>
+                <button onClick={() => { setFlipped(false); setShowAnswer(false); setView("study"); }} style={{
+                  flex: 1, padding: "12px 0", border: "none", borderRadius: 10,
+                  background: "#4a7c59", color: "#fff", fontSize: 14,
+                  cursor: "pointer", fontWeight: 600,
+                }}>返回学习</button>
               </div>
             </div>
           )}
@@ -1181,66 +1498,167 @@ function App(){
     );
   };
 
-  const renderHome=()=>(
-    <div style={{maxWidth:520,margin:"0 auto",padding:"0 16px"}}>
-      <div style={{textAlign:"center",padding:"32px 20px",
-        background:"linear-gradient(145deg, #fdf8f0 0%, #f5ead6 40%, #fdf8f0 100%)",borderRadius:20,marginBottom:20,
-        boxShadow:"0 4px 24px rgba(120,80,40,0.08)",border:"1px solid rgba(120,80,40,0.08)",position:"relative",overflow:"hidden"}}>
-        <div style={{position:"absolute",top:-30,right:-30,width:120,height:120,borderRadius:"50%",
-          background:"radial-gradient(circle, rgba(201,169,110,0.12) 0%, transparent 70%)"}}/>
-        <div style={{position:"absolute",bottom:-20,left:-20,width:80,height:80,borderRadius:"50%",
-          background:"radial-gradient(circle, rgba(74,124,89,0.08) 0%, transparent 70%)"}}/>
-        <div style={{fontSize:11,color:"#c9a96e",letterSpacing:6,marginBottom:8,fontWeight:500}}>每日古诗 · 日积月累</div>
-        <div style={{fontSize:32,fontWeight:800,color:"#3a2a14",letterSpacing:6,
-          fontFamily:"'Noto Serif SC','STSong','SimSun',serif",marginBottom:8}}>初中必背古诗词</div>
-        <div style={{fontSize:13,color:"#8b7355",marginBottom:20}}>七至九年级 · {totalPoems}首经典 · 中考核心篇目</div>
-        <div style={{display:"flex",gap:12,justifyContent:"center"}}>
-          {[{v:masteredCount,l:"已掌握",c:"#7a4f1a"},{v:totalPoems-masteredCount,l:"待学习",c:"#4a7c59"},{v:streak,l:"连续天数",c:"#c44"}].map((s,i)=>(
-            <div key={i} style={{padding:"12px 18px",background:"rgba(255,255,255,0.6)",borderRadius:12,backdropFilter:"blur(8px)"}}>
-              <div style={{fontSize:24,fontWeight:800,color:s.c}}>{s.v}</div>
-              <div style={{fontSize:11,color:"#999"}}>{s.l}</div>
-            </div>
-          ))}
+  const renderHome = () => (
+    <div style={{ maxWidth: 520, margin: "0 auto", padding: "0 16px" }}>
+      {/* Hero */}
+      <div style={{
+        textAlign: "center", padding: "32px 20px",
+        background: "linear-gradient(145deg, #fdf8f0 0%, #f5ead6 40%, #fdf8f0 100%)",
+        borderRadius: 20, marginBottom: 20,
+        boxShadow: "0 4px 24px rgba(120,80,40,0.08)",
+        border: "1px solid rgba(120,80,40,0.08)",
+        position: "relative", overflow: "hidden",
+      }}>
+        {/* 装饰 */}
+        <div style={{
+          position: "absolute", top: -30, right: -30, width: 120, height: 120,
+          borderRadius: "50%", background: "radial-gradient(circle, rgba(201,169,110,0.12) 0%, transparent 70%)",
+        }} />
+        <div style={{
+          position: "absolute", bottom: -20, left: -20, width: 80, height: 80,
+          borderRadius: "50%", background: "radial-gradient(circle, rgba(74,124,89,0.08) 0%, transparent 70%)",
+        }} />
+
+        <div style={{
+          fontSize: 11, color: "#c9a96e", letterSpacing: 6, marginBottom: 8,
+          textTransform: "uppercase", fontWeight: 500,
+        }}>每日古诗 · 日积月累</div>
+
+        <div style={{
+          fontSize: 32, fontWeight: 800, color: "#3a2a14", letterSpacing: 6,
+          fontFamily: "'Noto Serif SC', 'STSong', 'SimSun', serif",
+          marginBottom: 8,
+        }}>初中必背古诗词</div>
+
+        <div style={{ fontSize: 13, color: "#8b7355", marginBottom: 20 }}>
+          七至九年级 · {totalPoems}首经典 · 中考核心篇目
+        </div>
+
+        {/* 统计卡片 */}
+        <div style={{ display: "flex", gap: 12, justifyContent: "center" }}>
+          <div style={{
+            padding: "12px 18px", background: "rgba(255,255,255,0.6)",
+            borderRadius: 12, backdropFilter: "blur(8px)",
+          }}>
+            <div style={{ fontSize: 24, fontWeight: 800, color: "#7a4f1a" }}>{masteredCount}</div>
+            <div style={{ fontSize: 11, color: "#999" }}>已掌握</div>
+          </div>
+          <div style={{
+            padding: "12px 18px", background: "rgba(255,255,255,0.6)",
+            borderRadius: 12, backdropFilter: "blur(8px)",
+          }}>
+            <div style={{ fontSize: 24, fontWeight: 800, color: "#4a7c59" }}>{totalPoems - masteredCount}</div>
+            <div style={{ fontSize: 11, color: "#999 }}>待学习</div>
+          </div>
+          <div style={{
+            padding: "12px 18px", background: "rgba(255,255,255,0.6)",
+            borderRadius: 12, backdropFilter: "blur(8px)",
+          }}>
+            <div style={{ fontSize: 24, fontWeight: 800, color: "#c44" }}>{streak}</div>
+            <div style={{ fontSize: 11, color: "#999 }}>连续天数</div>
+          </div>
         </div>
       </div>
-      <div style={{padding:"16px 20px",background:"#fff",borderRadius:14,boxShadow:"0 2px 12px rgba(0,0,0,0.04)",marginBottom:16,border:"1px solid rgba(0,0,0,0.04)"}}>
-        <div style={{display:"flex",justifyContent:"space-between",marginBottom:8}}>
-          <span style={{fontSize:13,color:"#666",fontWeight:500}}>总体进度</span>
-          <span style={{fontSize:13,color:"#7a4f1a",fontWeight:700}}>{Math.round(masteredCount/totalPoems*100)}%</span>
+
+      {/* 进度条 */}
+      <div style={{
+        padding: "16px 20px", background: "#fff", borderRadius: 14,
+        boxShadow: "0 2px 12px rgba(0,0,0,0.04)", marginBottom: 16,
+        border: "1px solid rgba(0,0,0,0.04)",
+      }}>
+        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
+          <span style={{ fontSize: 13, color: "#666", fontWeight: 500 }}>总体进度</span>
+          <span style={{ fontSize: 13, color: "#7a4f1a", fontWeight: 700 }}>
+            {Math.round(masteredCount / totalPoems * 100)}%
+          </span>
         </div>
-        <div style={{height:8,background:"rgba(120,80,40,0.08)",borderRadius:4,overflow:"hidden"}}>
-          <div style={{height:"100%",borderRadius:4,background:"linear-gradient(90deg, #c9a96e 0%, #8b6914 100%)",
-            width:`${masteredCount/totalPoems*100}%`,transition:"width 0.8s cubic-bezier(0.4,0,0.2,1)"}}/>
+        <div style={{
+          height: 8, background: "rgba(120,80,40,0.08)", borderRadius: 4, overflow: "hidden",
+        }}>
+          <div style={{
+            height: "100%", borderRadius: 4,
+            background: "linear-gradient(90deg, #c9a96e 0%, #8b6914 100%)",
+            width: `${masteredCount / totalPoems * 100}%`,
+            transition: "width 0.8s cubic-bezier(0.4,0,0.2,1)",
+          }} />
         </div>
       </div>
-      <div style={{display:"flex",flexDirection:"column",gap:10}}>
-        <button onClick={()=>{setCardIdx(0);setFlipped(false);setShowAnswer(false);setView("study");}} style={{
-          padding:"16px 20px",border:"none",borderRadius:14,background:"linear-gradient(135deg, #3a2a14 0%, #7a4f1a 100%)",
-          color:"#fff",fontSize:15,cursor:"pointer",fontWeight:700,boxShadow:"0 4px 16px rgba(58,42,20,0.2)",
-          display:"flex",alignItems:"center",justifyContent:"space-between",letterSpacing:1}}>
-          <span>今日学习（3首）</span><span style={{fontSize:20}}>→</span>
+
+      {/* 行动按钮 */}
+      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+        <button onClick={() => { setCardIdx(0); setFlipped(false); setShowAnswer(false); setView("study"); }} style={{
+          padding: "16px 20px", border: "none", borderRadius: 14,
+          background: "linear-gradient(135deg, #3a2a14 0%, #7a4f1a 100%)",
+          color: "#fff", fontSize: 15, cursor: "pointer", fontWeight: 700,
+          boxShadow: "0 4px 16px rgba(58,42,20,0.2)",
+          display: "flex", alignItems: "center", justifyContent: "space-between",
+          letterSpacing: 1,
+        }}>
+          <span>今日学习（3首）</span>
+          <span style={{ fontSize: 20 }}>→</span>
         </button>
-        <div style={{display:"flex",gap:10}}>
-          <button onClick={()=>startReview("unmastered")} style={{flex:1,padding:"14px 0",border:"1px solid rgba(74,124,89,0.3)",
-            borderRadius:14,background:"rgba(74,124,89,0.04)",color:"#4a7c59",fontSize:14,cursor:"pointer",fontWeight:600}}>复习未掌握</button>
-          <button onClick={()=>startReview("mastered")} style={{flex:1,padding:"14px 0",border:"1px solid rgba(120,80,40,0.2)",
-            borderRadius:14,background:"rgba(120,80,40,0.04)",color:"#7a4f1a",fontSize:14,cursor:"pointer",fontWeight:600}}>巩固已掌握</button>
+
+        <div style={{ display: "flex", gap: 10 }}>
+          <button onClick={() => startReview("unmastered")} style={{
+            flex: 1, padding: "14px 0", border: "1px solid rgba(74,124,89,0.3)",
+            borderRadius: 14, background: "rgba(74,124,89,0.04)",
+            color: "#4a7c59", fontSize: 14, cursor: "pointer", fontWeight: 600,
+          }}>
+            复习未掌握
+          </button>
+          <button onClick={() => startReview("mastered")} style={{
+            flex: 1, padding: "14px 0", border: "1px solid rgba(120,80,40,0.2)",
+            borderRadius: 14, background: "rgba(120,80,40,0.04)",
+            color: "#7a4f1a", fontSize: 14, cursor: "pointer", fontWeight: 600,
+          }}>
+            巩固已掌握
+          </button>
         </div>
-        <button onClick={()=>startReview("all")} style={{padding:"14px 0",border:"1px solid rgba(0,0,0,0.08)",borderRadius:14,
-          background:"#fff",color:"#666",fontSize:14,cursor:"pointer",fontWeight:500}}>全部诗词随机复习</button>
+
+        <button onClick={() => startReview("all")} style={{
+          padding: "14px 0", border: "1px solid rgba(0,0,0,0.08)",
+          borderRadius: 14, background: "#fff",
+          color: "#666", fontSize: 14, cursor: "pointer", fontWeight: 500,
+        }}>
+          全部诗词随机复习
+        </button>
       </div>
-      <div style={{marginTop:20,padding:"16px 20px",background:"#fff",borderRadius:14,boxShadow:"0 2px 12px rgba(0,0,0,0.04)",border:"1px solid rgba(0,0,0,0.04)"}}>
-        <div style={{fontSize:13,color:"#666",fontWeight:600,marginBottom:12}}>今日推荐</div>
-        {todayPoems.map((p,i)=>(
-          <div key={p.id} style={{padding:"10px 0",borderBottom:i<2?"1px solid rgba(0,0,0,0.04)":"none",
-            display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+
+      {/* 今日诗词预览 */}
+      <div style={{
+        marginTop: 20, padding: "16px 20px",
+        background: "#fff", borderRadius: 14,
+        boxShadow: "0 2px 12px rgba(0,0,0,0.04)",
+        border: "1px solid rgba(0,0,0,0.04)",
+      }}>
+        <div style={{ fontSize: 13, color: "#666", fontWeight: 600, marginBottom: 12 }}>
+          今日推荐
+        </div>
+        {todayPoems.map((p, i) => (
+          <div key={p.id} style={{
+            padding: "10px 0",
+            borderBottom: i < 2 ? "1px solid rgba(0,0,0,0.04)" : "none",
+            display: "flex", justifyContent: "space-between", alignItems: "center",
+          }}>
             <div>
-              <span style={{fontSize:14,fontWeight:600,color:"#3a2a14",fontFamily:"'Noto Serif SC','STSong',serif"}}>{p.title}</span>
-              <span style={{fontSize:12,color:"#999",marginLeft:8}}>[{p.dynasty}] {p.author}</span>
+              <span style={{
+                fontSize: 14, fontWeight: 600, color: "#3a2a14",
+                fontFamily: "'Noto Serif SC', 'STSong', serif",
+              }}>{p.title}</span>
+              <span style={{ fontSize: 12, color: "#999", marginLeft: 8 }}>
+                [{p.dynasty}] {p.author}
+              </span>
             </div>
-            <div style={{display:"flex",gap:4,alignItems:"center"}}>
-              <span style={{fontSize:10,color:"#8b6914",background:"rgba(139,105,20,0.08)",padding:"2px 8px",borderRadius:8}}>{p.grade}</span>
-              {progress[p.id]?.mastered&&<span style={{fontSize:10,color:"#2d7d46",background:"rgba(45,125,70,0.08)",padding:"2px 8px",borderRadius:8}}>已掌握</span>}
+            <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
+              <span style={{
+                fontSize: 10, color: "#8b6914", background: "rgba(139,105,20,0.08)",
+                padding: "2px 8px", borderRadius: 8,
+              }}>{p.grade}</span>
+              {progress[p.id]?.mastered && (
+                <span style={{ fontSize: 10, color: "#2d7d46", background: "rgba(45,125,70,0.08)", padding: "2px 8px", borderRadius: 8 }}>
+                  已掌握
+                </span>
+              )}
             </div>
           </div>
         ))}
@@ -1248,84 +1666,180 @@ function App(){
     </div>
   );
 
-  const renderStats=()=>{
-    const byGrade={};
-    POEMS.forEach(p=>{if(!byGrade[p.grade])byGrade[p.grade]={total:0,mastered:0};byGrade[p.grade].total++;if(progress[p.id]?.mastered)byGrade[p.grade].mastered++;});
-    return(
-      <div style={{maxWidth:520,margin:"0 auto",padding:"0 16px"}}>
-        <div style={{padding:"24px 20px",background:"#fff",borderRadius:16,boxShadow:"0 2px 12px rgba(0,0,0,0.04)",marginBottom:16,border:"1px solid rgba(0,0,0,0.04)"}}>
-          <div style={{fontSize:18,fontWeight:700,color:"#3a2a14",marginBottom:16,fontFamily:"'Noto Serif SC','STSong',serif"}}>学习统计</div>
-          <div style={{display:"flex",gap:12,marginBottom:20}}>
-            <div style={{flex:1,padding:"16px 12px",borderRadius:12,background:"linear-gradient(135deg, rgba(201,169,110,0.08) 0%, rgba(139,105,20,0.08) 100%)",textAlign:"center"}}>
-              <div style={{fontSize:28,fontWeight:800,color:"#7a4f1a"}}>{masteredCount}/{totalPoems}</div>
-              <div style={{fontSize:11,color:"#999",marginTop:2}}>已掌握/总数</div>
+  const renderStats = () => {
+    const byGrade = {};
+    POEMS.forEach(p => {
+      if (!byGrade[p.grade]) byGrade[p.grade] = { total: 0, mastered: 0 };
+      byGrade[p.grade].total++;
+      if (progress[p.id]?.mastered) byGrade[p.grade].mastered++;
+    });
+
+    return (
+      <div style={{ maxWidth: 520, margin: "0 auto", padding: "0 16px" }}>
+        <div style={{
+          padding: "24px 20px", background: "#fff", borderRadius: 16,
+          boxShadow: "0 2px 12px rgba(0,0,0,0.04)", marginBottom: 16,
+          border: "1px solid rgba(0,0,0,0.04)",
+        }}>
+          <div style={{
+            fontSize: 18, fontWeight: 700, color: "#3a2a14", marginBottom: 16,
+            fontFamily: "'Noto Serif SC', 'STSong', serif",
+          }}>学习统计</div>
+
+          <div style={{ display: "flex", gap: 12, marginBottom: 20 }}>
+            <div style={{
+              flex: 1, padding: "16px 12px", borderRadius: 12,
+              background: "linear-gradient(135deg, rgba(201,169,110,0.08) 0%, rgba(139,105,20,0.08) 100%)",
+              textAlign: "center",
+            }}>
+              <div style={{ fontSize: 28, fontWeight: 800, color: "#7a4f1a" }}>{masteredCount}/{totalPoems}</div>
+              <div style={{ fontSize: 11, color: "#999", marginTop: 2 }}>已掌握/总数</div>
             </div>
-            <div style={{flex:1,padding:"16px 12px",borderRadius:12,background:"linear-gradient(135deg, rgba(74,124,89,0.08) 0%, rgba(45,125,70,0.08) 100%)",textAlign:"center"}}>
-              <div style={{fontSize:28,fontWeight:800,color:"#2d7d46"}}>{streak}</div>
-              <div style={{fontSize:11,color:"#999",marginTop:2}}>连续打卡天数</div>
+            <div style={{
+              flex: 1, padding: "16px 12px", borderRadius: 12,
+              background: "linear-gradient(135deg, rgba(74,124,89,0.08) 0%, rgba(45,125,70,0.08) 100%)",
+              textAlign: "center",
+            }}>
+              <div style={{ fontSize: 28, fontWeight: 800, color: "#2d7d46" }}>{streak}</div>
+              <div style={{ fontSize: 11, color: "#999", marginTop: 2 }}>连续打卡天数</div>
             </div>
           </div>
-          <div style={{fontSize:14,fontWeight:600,color:"#666",marginBottom:12}}>分册进度</div>
-          {Object.entries(byGrade).sort().map(([grade,data])=>{
-            const pct=Math.round(data.mastered/data.total*100);
-            return(<div key={grade} style={{marginBottom:14}}>
-              <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
-                <span style={{fontSize:13,color:"#666"}}>{grade}</span>
-                <span style={{fontSize:12,color:"#999"}}>{data.mastered}/{data.total}</span>
+
+          {/* 分年级统计 */}
+          <div style={{ fontSize: 14, fontWeight: 600, color: "#666", marginBottom: 12 }}>
+            分册进度
+          </div>
+          {Object.entries(byGrade).sort().map(([grade, data]) => {
+            const pct = Math.round(data.mastered / data.total * 100);
+            return (
+              <div key={grade} style={{ marginBottom: 14 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+                  <span style={{ fontSize: 13, color: "#666" }}>{grade}</span>
+                  <span style={{ fontSize: 12, color: "#999" }}>{data.mastered}/{data.total}</span>
+                </div>
+                <div style={{
+                  height: 6, background: "rgba(0,0,0,0.06)", borderRadius: 3, overflow: "hidden",
+                }}>
+                  <div style={{
+                    height: "100%", borderRadius: 3,
+                    background: pct === 100 ? "#2d7d46" : "linear-gradient(90deg, #c9a96e, #8b6914)",
+                    width: `${pct}%`, transition: "width 0.6s",
+                  }} />
+                </div>
               </div>
-              <div style={{height:6,background:"rgba(0,0,0,0.06)",borderRadius:3,overflow:"hidden"}}>
-                <div style={{height:"100%",borderRadius:3,background:pct===100?"#2d7d46":"linear-gradient(90deg, #c9a96e, #8b6914)",
-                  width:`${pct}%`,transition:"width 0.6s"}}/>
-              </div>
-            </div>);
+            );
           })}
         </div>
-        <div style={{padding:"20px",background:"#fff",borderRadius:16,boxShadow:"0 2px 12px rgba(0,0,0,0.04)",border:"1px solid rgba(0,0,0,0.04)"}}>
-          <div style={{fontSize:14,fontWeight:600,color:"#666",marginBottom:12}}>全部诗词</div>
-          {POEMS.map(p=>{const isM=progress[p.id]?.mastered;const rc=progress[p.id]?.reviewed||0;
-            return(<div key={p.id} style={{padding:"10px 0",borderBottom:"1px solid rgba(0,0,0,0.04)",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-              <div style={{display:"flex",alignItems:"center",gap:8}}>
-                <div style={{width:22,height:22,borderRadius:"50%",background:isM?"#2d7d46":"rgba(0,0,0,0.06)",
-                  display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,color:isM?"#fff":"#999",fontWeight:600,flexShrink:0}}>
-                  {isM?"✓":p.id}</div>
-                <div><div style={{fontSize:13,fontWeight:500,color:"#3a2a14",fontFamily:"'Noto Serif SC','STSong',serif"}}>{p.title}</div>
-                  <div style={{fontSize:11,color:"#999"}}>[{p.dynasty}] {p.author} · {p.grade}</div></div>
+
+        {/* 诗词列表 */}
+        <div style={{
+          padding: "20px", background: "#fff", borderRadius: 16,
+          boxShadow: "0 2px 12px rgba(0,0,0,0.04)",
+          border: "1px solid rgba(0,0,0,0.04)",
+        }}>
+          <div style={{ fontSize: 14, fontWeight: 600, color: "#666", marginBottom: 12 }}>
+            全部诗词
+          </div>
+          {POEMS.map(p => {
+            const isM = progress[p.id]?.mastered;
+            const rc = progress[p.id]?.reviewed || 0;
+            return (
+              <div key={p.id} style={{
+                padding: "10px 0", borderBottom: "1px solid rgba(0,0,0,0.04)",
+                display: "flex", justifyContent: "space-between", alignItems: "center",
+              }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <div style={{
+                    width: 22, height: 22, borderRadius: "50%",
+                    background: isM ? "#2d7d46" : "rgba(0,0,0,0.06)",
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    fontSize: 11, color: isM ? "#fff" : "#999", fontWeight: 600,
+                    flexShrink: 0,
+                  }}>{isM ? "✓" : p.id}</div>
+                  <div>
+                    <div style={{
+                      fontSize: 13, fontWeight: 500, color: "#3a2a14",
+                      fontFamily: "'Noto Serif SC', 'STSong', serif",
+                    }}>{p.title}</div>
+                    <div style={{ fontSize: 11, color: "#999" }}>
+                      [{p.dynasty}] {p.author} · {p.grade}
+                    </div>
+                  </div>
+                </div>
+                {rc > 0 && (
+                  <span style={{ fontSize: 10, color: "#999" }}>{rc}次</span>
+                )}
               </div>
-              {rc>0&&<span style={{fontSize:10,color:"#999"}}>{rc}次</span>}
-            </div>);
+            );
           })}
         </div>
-        <button onClick={()=>setShowResetConfirm(true)} style={{width:"100%",padding:"14px 0",border:"1px solid rgba(200,50,50,0.2)",
-          borderRadius:14,background:"rgba(200,50,50,0.04)",color:"#c44",fontSize:14,cursor:"pointer",marginTop:16,marginBottom:20}}>
-          {showResetConfirm?"确认重置？再点一次":"重置所有进度"}</button>
-        {showResetConfirm&&<button onClick={()=>{setProgress({});setStreak(0);setShowResetConfirm(false);}} style={{
-          width:"100%",padding:"14px 0",border:"none",borderRadius:14,background:"#c44",color:"#fff",fontSize:14,
-          cursor:"pointer",marginTop:-12,marginBottom:20,fontWeight:600}}>确认重置所有数据</button>}
+
+        {/* 重置按钮 */}
+        <button onClick={() => setShowResetConfirm(true)} style={{
+          width: "100%", padding: "14px 0", border: "1px solid rgba(200,50,50,0.2)",
+          borderRadius: 14, background: "rgba(200,50,50,0.04)",
+          color: "#c44", fontSize: 14, cursor: "pointer", marginTop: 16,
+          marginBottom: 20,
+        }}>{showResetConfirm ? "确认重置？再点一次" : "重置所有进度"}</button>
+        {showResetConfirm && (
+          <button onClick={() => {
+            setProgress({});
+            saveProgress({});
+            setStreak(0);
+            setLastDate("");
+            saveStreak({ count: 0, lastDate: "" });
+            setShowResetConfirm(false);
+          }} style={{
+            width: "100%", padding: "14px 0", border: "none",
+            borderRadius: 14, background: "#c44",
+            color: "#fff", fontSize: 14, cursor: "pointer",
+            marginTop: -12, marginBottom: 20, fontWeight: 600,
+          }}>确认重置所有数据</button>
+        )}
       </div>
     );
   };
 
-  return(
-    <div style={{minHeight:"100vh",background:"linear-gradient(180deg, #faf7f2 0%, #f2ece2 50%, #faf7f2 100%)",
-      fontFamily:"-apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif",paddingBottom:24}}>
-      <div style={{textAlign:"center",padding:"20px 16px 12px"}}>
-        <div style={{fontSize:16,fontWeight:700,color:"#3a2a14",letterSpacing:3,fontFamily:"'Noto Serif SC','STSong','SimSun',serif"}}>
-          初中必背古诗词 · 每日卡片</div>
-        <div style={{fontSize:11,color:"#b8a88a",marginTop:4}}>
-          {new Date().toLocaleDateString("zh-CN",{month:"long",day:"numeric",weekday:"long"})}
-          {streak>0&&<span style={{marginLeft:8,color:"#c44"}}>连续打卡 {streak} 天</span>}
+  return (
+    <div style={{
+      minHeight: "100vh",
+      background: "linear-gradient(180deg, #faf7f2 0%, #f2ece2 50%, #faf7f2 100%)",
+      fontFamily: "-apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif",
+      paddingBottom: 24,
+    }}>
+      {/* 顶栏 */}
+      <div style={{
+        textAlign: "center", padding: "20px 16px 12px",
+      }}>
+        <div style={{
+          fontSize: 16, fontWeight: 700, color: "#3a2a14", letterSpacing: 3,
+          fontFamily: "'Noto Serif SC', 'STSong', 'SimSun', serif",
+        }}>
+          初中必背古诗词 · 每日卡片
+        </div>
+        <div style={{ fontSize: 11, color: "#b8a88a", marginTop: 4 }}>
+          {new Date().toLocaleDateString("zh-CN", { month: "long", day: "numeric", weekday: "long" })}
+          {streak > 0 && <span style={{ marginLeft: 8, color: "#c44" }}>连续打卡 {streak} 天</span>}
         </div>
       </div>
+
       {renderNav()}
-      <div style={{opacity:fadeIn?1:0,transform:fadeIn?"translateY(0)":"translateY(8px)",transition:"all 0.3s ease",padding:"16px 0"}}>
-        {view==="home"&&renderHome()}
-        {(view==="study"||view==="review")&&renderCard(currentPoem,pool,cardIdx)}
-        {view==="quiz"&&renderQuiz()}
-        {view==="stats"&&renderStats()}
+
+      <div style={{
+        opacity: fadeIn ? 1 : 0,
+        transform: fadeIn ? "translateY(0)" : "translateY(8px)",
+        transition: "all 0.3s ease",
+        padding: "16px 0",
+      }}>
+        {view === "home" && renderHome()}
+        {(view === "study" || view === "review") && renderCard(currentPoem, view === "review" ? reviewPool : todayPoems, cardIdx)}
+        {view === "quiz" && renderQuiz()}
+        {view === "stats" && renderStats()}
       </div>
     </div>
   );
 }
+
 
 ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
 </script>
